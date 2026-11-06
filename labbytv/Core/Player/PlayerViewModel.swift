@@ -30,6 +30,10 @@ final class PlayerViewModel {
     private(set) var didFinish = false
     /// Shown briefly after a channel change.
     private(set) var channelBanner: Channel?
+    /// Kept across videos (saved in Preferences).
+    private(set) var aspectMode: VideoAspectMode
+    /// VLC only; AVPlayer's speed lives in its own transport bar control.
+    private(set) var speed: Float = PlaybackSpeed.normal
 
     let player = AVPlayer()
     #if canImport(LabbyVLC)
@@ -58,6 +62,25 @@ final class PlayerViewModel {
         self.catalog = catalog
         self.history = history
         self.preferences = preferences
+        self.aspectMode = preferences.videoAspectMode
+    }
+
+    var canChangeSpeed: Bool { !item.isLive }
+
+    func setAspectMode(_ mode: VideoAspectMode) {
+        aspectMode = mode
+        preferences.videoAspectMode = mode
+        #if canImport(LabbyVLC)
+        vlc?.setVideoScaling(crop: mode.vlcCropGeometry, aspectRatio: mode.vlcAspectRatio)
+        #endif
+    }
+
+    func setSpeed(_ rate: Float) {
+        guard canChangeSpeed else { return }
+        speed = rate
+        #if canImport(LabbyVLC)
+        if backend == .vlc { vlc?.setRate(rate) }
+        #endif
     }
 
     var canSwitchChannels: Bool {
@@ -131,6 +154,8 @@ final class PlayerViewModel {
             #endif
 
             backend = .avPlayer
+            // defaultRate carries over between items; live must stay at 1×.
+            if item.isLive { player.defaultRate = PlaybackSpeed.normal }
             // Some Xtream panels refuse unknown players (403); identify as the
             // ffmpeg-based player the Android app uses, which they accept.
             let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: Self.streamUserAgent])
@@ -167,6 +192,8 @@ final class PlayerViewModel {
         let engine = vlc ?? VLCPlaybackEngine()
         vlc = engine
         engine.load(url: url, startAt: pendingSeek, userAgent: Self.streamUserAgent)
+        engine.setVideoScaling(crop: aspectMode.vlcCropGeometry, aspectRatio: aspectMode.vlcAspectRatio)
+        engine.setRate(speed)
         pendingSeek = nil
 
         let type = logType(for: item)

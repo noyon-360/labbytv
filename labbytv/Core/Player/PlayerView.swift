@@ -45,7 +45,15 @@ struct PlayerView: View {
         #if canImport(LabbyVLC)
         if viewModel.backend == .vlc, let engine = viewModel.vlc {
             // VLCPlayerView handles Menu itself (hide controls, then close).
-            VLCPlayerView(engine: engine, title: viewModel.item.title, onClose: onClose)
+            VLCPlayerView(
+                engine: engine,
+                title: viewModel.item.title,
+                aspectMode: viewModel.aspectMode,
+                speed: viewModel.speed,
+                onAspectChange: viewModel.setAspectMode,
+                onSpeedChange: viewModel.setSpeed,
+                onClose: onClose
+            )
         } else {
             avSurface
         }
@@ -58,7 +66,10 @@ struct PlayerView: View {
         PlayerSurface(
             player: viewModel.player,
             allowsChannelSwitching: viewModel.canSwitchChannels,
-            onChannelStep: { step in Task { await viewModel.switchChannel(by: step) } }
+            allowsSpeedChange: viewModel.canChangeSpeed,
+            aspectMode: viewModel.aspectMode,
+            onChannelStep: { step in Task { await viewModel.switchChannel(by: step) } },
+            onAspectChange: viewModel.setAspectMode
         )
         .ignoresSafeArea()
     }

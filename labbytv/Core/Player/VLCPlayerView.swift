@@ -4,21 +4,27 @@ import SwiftUI
 
 /// Playback screen for VLC streams. VLC has no tvOS transport bar, so this
 /// gives the Siri Remote the same basics: Play/Pause, click left/right to
-/// skip 10 s, click to show controls, Audio and Subtitles menus, and
-/// Menu/Back to hide the controls and then close.
+/// skip 10 s, click to show controls, Audio, Subtitles, Speed and Aspect
+/// menus, and Menu/Back to hide the controls and then close.
 struct VLCPlayerView: View {
     let engine: VLCPlaybackEngine
     let title: String
+    let aspectMode: VideoAspectMode
+    let speed: Float
+    let onAspectChange: (VideoAspectMode) -> Void
+    let onSpeedChange: (Float) -> Void
     let onClose: () -> Void
 
     @State private var controlsVisible = true
     @State private var hideTask: Task<Void, Never>?
     @State private var showingAudio = false
     @State private var showingSubtitles = false
+    @State private var showingSpeed = false
+    @State private var showingAspect = false
     @FocusState private var focus: ControlFocus?
 
     private enum ControlFocus: Hashable {
-        case catcher, back, playPause, forward, audio, subtitles
+        case catcher, back, playPause, forward, audio, subtitles, speed, aspect
     }
 
     private static let skip: Double = 10
@@ -82,6 +88,20 @@ struct VLCPlayerView: View {
                 }
             }
         }
+        .confirmationDialog("Playback Speed", isPresented: $showingSpeed) {
+            ForEach(PlaybackSpeed.options, id: \.self) { rate in
+                Button(label(PlaybackSpeed.label(for: rate), selected: rate == speed)) {
+                    onSpeedChange(rate)
+                }
+            }
+        }
+        .confirmationDialog("Aspect Ratio", isPresented: $showingAspect) {
+            ForEach(VideoAspectMode.allCases, id: \.self) { mode in
+                Button(label(mode.title, selected: mode == aspectMode)) {
+                    onAspectChange(mode)
+                }
+            }
+        }
     }
 
     private var controls: some View {
@@ -106,6 +126,12 @@ struct VLCPlayerView: View {
                 controlButton(engine.status == .playing ? "pause.fill" : "play.fill", focus: .playPause) { engine.togglePlayPause() }
                 controlButton("goforward.10", focus: .forward) { engine.jump(by: Self.skip) }
                 Spacer()
+                Button { showingSpeed = true } label: { Label(PlaybackSpeed.label(for: speed), systemImage: "gauge.with.dots.needle.67percent") }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .focused($focus, equals: .speed)
+                Button { showingAspect = true } label: { Label(aspectMode.title, systemImage: "aspectratio") }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .focused($focus, equals: .aspect)
                 if engine.audioTracks.count > 1 {
                     Button { showingAudio = true } label: { Label("Audio", systemImage: "speaker.wave.2") }
                         .buttonStyle(SecondaryButtonStyle())
@@ -157,7 +183,7 @@ struct VLCPlayerView: View {
         guard controlsVisible else { return }
         hideTask = Task {
             try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled, engine.status == .playing, !showingAudio, !showingSubtitles else { return }
+            guard !Task.isCancelled, engine.status == .playing, !showingAudio, !showingSubtitles, !showingSpeed, !showingAspect else { return }
             hideControls()
         }
     }

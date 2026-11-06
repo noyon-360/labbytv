@@ -6,9 +6,15 @@ final class Preferences {
     private let defaults: UserDefaults
     private let episodeContextKey = "episodeContexts"
     private let maxEpisodeContexts = 300
+    private let aspectModeKey = "player.aspectMode"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    var videoAspectMode: VideoAspectMode {
+        get { defaults.string(forKey: aspectModeKey).flatMap(VideoAspectMode.init(rawValue:)) ?? .fit }
+        set { defaults.set(newValue.rawValue, forKey: aspectModeKey) }
     }
 
     func episodeContext(for episodeID: String) -> EpisodeContext? {

@@ -101,6 +101,26 @@ public final class VLCPlaybackEngine {
         status = .idle
     }
 
+    /// Playback speed (1 = normal). VLC may ignore it for some network streams.
+    public func setRate(_ rate: Float) {
+        mediaPlayer.rate = rate
+    }
+
+    /// `crop` and `aspectRatio` are VLC geometry strings such as "16:9";
+    /// `nil` resets each. libVLC copies the strings, so passing a temporary
+    /// C string is safe.
+    public func setVideoScaling(crop: String?, aspectRatio: String?) {
+        if let crop {
+            crop.withCString { mediaPlayer.videoCropGeometry = UnsafeMutablePointer(mutating: $0) }
+        } else {
+            mediaPlayer.videoCropGeometry = nil
+        }
+        if let aspectRatio {
+            aspectRatio.withCString { mediaPlayer.videoAspectRatio = UnsafeMutablePointer(mutating: $0) }
+        } else {
+            mediaPlayer.videoAspectRatio = nil
+        }
+    }
 
     // MARK: Delegate callbacks
 
