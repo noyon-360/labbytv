@@ -13,6 +13,7 @@ struct PaywallView: View {
         "No watermarks",
         "Instant sync across devices",
         "No device limit",
+        "Parental lock (paid plans)",
     ]
 
     var body: some View {
@@ -26,8 +27,23 @@ struct PaywallView: View {
                 Text("LABBY TV Pro")
                     .font(AppFonts.title)
 
-                if viewModel.premium.isPremium {
+                if viewModel.premium.isInFreeTrial {
+                    Label("You're on your free trial", systemImage: "gift.fill")
+                        .font(AppFonts.headline)
+                        .foregroundStyle(AppColors.success)
+                    if let endsAt = viewModel.premium.currentPeriodEndsAt {
+                        Text("Trial ends \(endsAt.formatted(date: .abbreviated, time: .omitted)). Your plan starts then unless you cancel in Settings › Accounts.")
+                            .font(AppFonts.caption)
+                            .foregroundStyle(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 1300)
+                    }
+                } else if viewModel.premium.isPremium {
                     Label("You're subscribed", systemImage: "checkmark.seal.fill")
+                        .font(AppFonts.headline)
+                        .foregroundStyle(AppColors.success)
+                } else if let trial = viewModel.premium.availableFreeTrial {
+                    Text("Try LABBY TV Pro free for \(trial.durationText)")
                         .font(AppFonts.headline)
                         .foregroundStyle(AppColors.success)
                 }
@@ -61,6 +77,14 @@ struct PaywallView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .focusSection()
+
+                if !viewModel.premium.isPremium, let trial = viewModel.premium.availableFreeTrial {
+                    Text(trial.termsText(priceAndPeriod: "the plan price"))
+                        .font(AppFonts.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 1300)
+                }
 
                 Text("Subscriptions renew automatically until cancelled in Settings › Accounts on Apple TV, or on any Apple device signed in with the same Apple ID.")
                     .font(AppFonts.caption)

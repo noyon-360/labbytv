@@ -26,27 +26,41 @@ struct GuideView: View {
             Text("See what's on now and next across all your channels.")
                 .font(AppFonts.body)
                 .foregroundStyle(AppColors.textSecondary)
-            NavigationLink("Get LABBY TV Pro", value: AppRoute.paywall)
+            if let trial = premium.availableFreeTrial {
+                Text("Try it free for \(trial.durationText).")
+                    .font(AppFonts.bodyBold)
+                    .foregroundStyle(AppColors.success)
+            }
+            NavigationLink(premium.availableFreeTrial?.buttonLabel ?? "Get LABBY TV Pro", value: AppRoute.paywall)
                 .buttonStyle(PrimaryButtonStyle())
-                .frame(width: 520)
+                .frame(width: 620)
         }
         .foregroundStyle(AppColors.textPrimary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Plans (and trial eligibility) normally load on the paywall; load
+        // them here too so the button can offer the trial.
+        .task {
+            if premium.packages.isEmpty { try? await premium.loadPackages() }
+        }
     }
 
     private var guide: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
-            details
-                .frame(height: 170, alignment: .topLeading)
-
-            HStack(spacing: Spacing.m) {
-                CategoryChips(
-                    categories: viewModel.channels.categories,
-                    selected: viewModel.channels.selectedCategory,
-                    onSelect: { category in Task { await viewModel.channels.select(category) } }
-                )
+            // Time controls sit beside the details, not the chips: the chip
+            // bar draws unclipped (for focus scale) and would slide under them.
+            HStack(alignment: .top, spacing: Spacing.m) {
+                details
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 timeControls
             }
+            .frame(height: 170, alignment: .top)
+
+            CategoryChips(
+                categories: viewModel.channels.categories,
+                selected: viewModel.channels.selectedCategory,
+                isLocked: viewModel.channels.isLocked,
+                onSelect: { category in Task { await viewModel.channels.select(category) } }
+            )
 
             ruler
 
@@ -54,6 +68,9 @@ struct GuideView: View {
         }
         .task { await viewModel.channels.loadIfNeeded() }
         .task { await viewModel.tickClock() }
+        .onChange(of: viewModel.channels.parentalLockChangeCount) {
+            Task { await viewModel.channels.applyParentalLockChanges() }
+        }
     }
 
     @ViewBuilder

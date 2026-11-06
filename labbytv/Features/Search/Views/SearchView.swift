@@ -55,6 +55,9 @@ struct SearchView: View {
         .scrollClipDisabled()
         .searchable(text: $viewModel.query, prompt: "Channels, movies, series")
         .task(id: viewModel.query) { await viewModel.search() }
+        .onChange(of: viewModel.parentalLockChangeCount) {
+            Task { await viewModel.applyParentalLockChanges() }
+        }
     }
 }
 

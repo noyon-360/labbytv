@@ -28,6 +28,14 @@ nonisolated struct User: Decodable, Sendable, Equatable {
         return expiry > now
     }
 
+    /// In a store free trial: the backend sets "trialing" from RevenueCat's
+    /// period_type and switches to "active" once the first payment goes through.
+    func isOnFreeTrial(now: Date = .now) -> Bool {
+        subscriptionStatus == "trialing" && hasActiveSubscription(now: now)
+    }
+
+    var expiresAt: Date? { subscriptionExpiresAt.flatMap(Self.parseDate) }
+
     static func parseDate(_ string: String) -> Date? {
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

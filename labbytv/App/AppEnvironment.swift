@@ -9,6 +9,7 @@ final class AppEnvironment {
     @ObservationIgnored let premium: PremiumService
     @ObservationIgnored let playerPresenter: PlayerPresenter
     @ObservationIgnored let preferences: Preferences
+    @ObservationIgnored let parentalLock: ParentalLockService
 
     @ObservationIgnored let authRepository: any AuthRepository
     @ObservationIgnored let playlistRepository: any PlaylistRepository
@@ -19,6 +20,7 @@ final class AppEnvironment {
 
     init(
         session: SessionStore,
+        store: any SecureStore,
         premium: PremiumService,
         preferences: Preferences,
         authRepository: any AuthRepository,
@@ -38,6 +40,7 @@ final class AppEnvironment {
         self.epgCache = EPGCache(repository: epgRepository)
         self.historyRepository = historyRepository
         self.profileRepository = profileRepository
+        self.parentalLock = ParentalLockService(store: store, preferences: preferences, profile: profileRepository)
     }
 
     /// The real app: Keychain, live backend.
@@ -56,6 +59,7 @@ final class AppEnvironment {
         }
         return AppEnvironment(
             session: session,
+            store: store,
             premium: premium,
             preferences: Preferences(),
             authRepository: AuthRepositoryLive(client: client, store: store),
@@ -100,6 +104,7 @@ final class AppEnvironment {
         }
         return AppEnvironment(
             session: session,
+            store: store,
             premium: PremiumService(),
             preferences: Preferences(defaults: UserDefaults(suiteName: "preview") ?? .standard),
             authRepository: MockAuthRepository(),

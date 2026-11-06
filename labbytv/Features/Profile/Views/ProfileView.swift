@@ -1,8 +1,12 @@
 import SwiftUI
 
 struct ProfileView: View {
+    @Environment(AppEnvironment.self) private var environment
     @State private var viewModel: ProfileViewModel
     @State private var confirmingSignOut = false
+    @State private var showingParentalLock = false
+    @State private var parentalUpsell: String?
+    @State private var showingPaywall = false
 
     init(viewModel: ProfileViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -21,6 +25,21 @@ struct ProfileView: View {
                     row("Switch Playlist", symbol: "list.bullet.rectangle", detail: viewModel.playlistName, route: .playlists)
                     row("Favorites", symbol: "heart.fill", route: .favorites)
                     row("Watch History", symbol: "clock.fill", route: .history)
+                    Button {
+                        if let message = viewModel.parentalLockBlockMessage {
+                            parentalUpsell = message
+                            return
+                        }
+                        // Only the parent may change the locks.
+                        Task {
+                            if await viewModel.unlockParentalSettings() {
+                                showingParentalLock = true
+                            }
+                        }
+                    } label: {
+                        ProfileRowLabel(title: "Parental Lock", symbol: "lock.shield.fill", detail: viewModel.parentalLockIsOn ? "On" : "Off", tint: AppColors.accent)
+                    }
+                    .buttonStyle(CardButtonStyle())
                     if viewModel.isPremium {
                         row("Subscription", symbol: "crown.fill", detail: "Pro", route: .paywall)
                     }
@@ -42,6 +61,22 @@ struct ProfileView: View {
         }
         .padding(.top, Spacing.l)
         .task { await viewModel.load() }
+        .navigationDestination(isPresented: $showingParentalLock) {
+            ParentalLockView(viewModel: ParentalLockViewModel(lock: environment.parentalLock, catalog: environment.catalogRepository))
+        }
+        .navigationDestination(isPresented: $showingPaywall) {
+            AppRouteDestination(route: .paywall)
+        }
+        .alert(
+            "Premium feature",
+            isPresented: Binding(get: { parentalUpsell != nil }, set: { if !$0 { parentalUpsell = nil } }),
+            presenting: parentalUpsell
+        ) { _ in
+            Button(viewModel.isPremium ? "View Plans" : "See Plans") { showingPaywall = true }
+            Button("Not Now", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
         .confirmationDialog("Sign out of LABBY TV?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) { Task { await viewModel.signOut() } }
             Button("Cancel", role: .cancel) {}
@@ -62,7 +97,7 @@ struct ProfileView: View {
             Text(viewModel.user?.email ?? "")
                 .font(AppFonts.body)
                 .foregroundStyle(AppColors.textSecondary)
-            Label(viewModel.isPremium ? "LABBY TV Pro" : "Free plan", systemImage: viewModel.isPremium ? "crown.fill" : "person")
+            Label(viewModel.planLabel, systemImage: viewModel.isPremium ? "crown.fill" : "person")
                 .font(AppFonts.bodyBold)
                 .foregroundStyle(viewModel.isPremium ? AppColors.accent : AppColors.textSecondary)
             Spacer()
@@ -116,5 +151,6 @@ private struct ProfileRowLabel: View {
             .appRouteDestinations()
     }
     .environment(environment)
+    .pinPrompt(environment.parentalLock)
 }
 #endif

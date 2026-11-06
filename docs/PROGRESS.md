@@ -31,12 +31,14 @@ Ticked = built, compiles clean in Swift 5 **and** Swift 6 language mode with no 
 - [x] Search across all types (2026-11-06)
 
 ## Phase 3: Premium & account
-- [ ] RevenueCat setup + `PremiumService` + backend verify. *Code done in `Core/Premium/PremiumService.swift` behind `#if canImport(RevenueCat)`; needs the SPM package + API key. Backend "verify" isn't called: Flutter doesn't call it either, and the backend uses the RevenueCat webhook as source of truth.*
-- [ ] Paywall + Restore Purchases. *UI done (`Features/Subscription/*`); untestable until RevenueCat is linked.*
+- [ ] RevenueCat setup + `PremiumService` + backend verify. *Code done in `Core/Premium/PremiumService.swift` behind `#if canImport(RevenueCat)`. 2026-11-07: `purchases-ios-spm` 5.102.3 linked (RevenueCat product only), RevenueCat code now compiles; `REVENUECAT_API_KEY` set in `Config/Secrets.xcconfig` (same Apple key as the iPhone app: same bundle ID `com.almightyflippa.labbytv`, universal purchase); `RevenueCatAPIKey = $(REVENUECAT_API_KEY)` in `Info.plist`. **Pending:** set `Secrets.xcconfig` as the target's base configuration in Xcode (verified with `-xcconfig` that the key then reaches the built Info.plist), then a sandbox purchase test. Backend "verify" isn't called: Flutter doesn't call it either, and the backend uses the RevenueCat webhook as source of truth.*
+- [ ] Paywall + Restore Purchases. *UI done (`Features/Subscription/*`); untestable until RevenueCat is linked.* 7-day free trial copy added 2026-11-07 (same as Flutter): `Core/Premium/FreeTrialOffer.swift`, trial badge + terms in `PlanCard` / `PaywallView`, "You're on your free trial" status from RevenueCat `periodType == .trial` or backend `subscriptionStatus == "trialing"`. Tests in `labbytvTests/Models/FreeTrialOfferTests.swift` (no test target yet). Premium system pass 2026-11-07: backend premium now needs `plan == "premium"` AND a live period (was `|| plan == "premium"`, which kept expired users premium until the daily job); Guide upsell offers "Start 7-Day Free Trial"; Profile shows "LABBY TV Pro · Free trial"; PiP explicitly off in `PlayerSurface` (not built on tvOS; AVPlayerViewController enables it by default).
 - [x] EPG guide grid (premium) with per-channel cache and now-line (2026-11-06): `Features/EPG/*`
 - [x] Watch history (continue watching) + favourites (2026-11-06): `Features/WatchHistory/*`
 - [x] Profile + legal text + logout (2026-11-06): `Features/Profile/*`
 - [x] Sign up, forgot password (OTP), TV QR login (2026-11-06): `Features/Auth/*`
+
+- [x] Parental lock (2026-11-07, requested by user; port of Flutter mobile `ParentalLockService`). `Core/ParentalLock/*` (rules, service, prompt), `Features/ParentalLock/*` (PIN pad, settings screen), Profile → Parental Lock (asks PIN first). 4-digit PIN stored as salted SHA-256 in Keychain; locked category ids per type in `Preferences`; both survive sign-out (as Flutter). Locked items hidden from "All" in Live/Guide/Movies/Series, Home and Search; locked chips show a lock and ask for the PIN; 5 wrong tries = 30 s cooldown; "Forgot PIN?" removes the PIN with the account password (`POST /user/verify-password`); every unlock ends when the app goes to background. No biometrics (Apple TV has none). Tests: `labbytvTests/Models/ParentalLockTests.swift` (type-checked, not run: no test target). *Not checked by hand in the simulator or on a Siri Remote.* Same gaps as Flutter: Favorites, Watch History and Continue Watching are not filtered. **Premium gate (2026-11-07):** paid Premium only, not the free trial (same as Flutter). `ParentalLockRules.premiumBlockMessage` + Profile alert with "See Plans"; a parent who already set a PIN keeps access after the plan ends. Tests: `ParentalLockPremiumTests`.
 
 ## Phase 4: Release prep
 - [ ] Layered app icon + Top Shelf images
@@ -47,7 +49,7 @@ Ticked = built, compiles clean in Swift 5 **and** Swift 6 language mode with no 
 ## Known gaps / decisions
 - Watch history stores only the episode id for series, so "Continue Watching" can resume an episode only if it was last played on this Apple TV (the TV remembers series id and extension locally in `Preferences`). Same limit as the Flutter app.
 - The Flutter repos for Live/Movies/Series/Genre/Search are merged into one `CatalogRepository` + generic `CatalogViewModel` (same endpoints and body).
-- Out of scope, not built: parental lock, EPG reminders, watch later, downloads, notifications, announcements.
+- Out of scope, not built: EPG reminders, watch later, downloads, notifications, announcements.
 
 ## VLC playback for MKV (added 2026-11-06, approved by user)
 - [x] `Packages/LabbyVLC`: local Swift package wrapping official VideoLAN **TVVLCKit 3.7.4** (LGPLv2.1, archive SHA-256 verified). Binary is git-ignored; `scripts/fetch-vlckit.sh` downloads and verifies it. Package builds for tvOS in Swift 6 mode.

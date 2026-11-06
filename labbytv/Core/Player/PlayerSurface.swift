@@ -14,6 +14,11 @@ struct PlayerSurface: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> PlayerContainerController {
         let controller = PlayerContainerController()
         controller.playerController.player = player
+        // PiP is Premium on phones, but on Apple TV it isn't built: the player
+        // is a full-screen cover that stops playback when it closes, so PiP
+        // would show a black screen. Keep it off (it's on by default) so free
+        // users don't get a half-working premium feature.
+        controller.playerController.allowsPictureInPicturePlayback = false
         return controller
     }
 

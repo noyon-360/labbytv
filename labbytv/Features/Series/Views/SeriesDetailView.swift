@@ -106,6 +106,8 @@ struct SeriesDetailView: View {
             }
             .padding(.vertical, Spacing.s)
         }
+        // LazyHStack is vertically greedy; keep the bar at chip height.
+        .fixedSize(horizontal: false, vertical: true)
         .scrollClipDisabled()
         .focusSection()
     }

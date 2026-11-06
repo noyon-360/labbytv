@@ -1,8 +1,8 @@
 {
   "default-configuration": "Release",
   "configurations": [
-    "Debug",
-    "Release",
+    { "name": "Debug", "file": { "anchor": "labbytv", "relative-path": "Secrets.xcconfig" } },
+    { "name": "Release", "file": { "anchor": "labbytv", "relative-path": "Secrets.xcconfig" } },
   ],
   "localizations": {
     "development": "en",
@@ -14,6 +14,12 @@
     {
       "kind": "local",
       "path": "Packages/LabbyVLC",
+    }, {
+      "kind": "remote",
+      "repository": "https://github.com/RevenueCat/purchases-ios-spm",
+      "version": {
+        "up-to-next-major-version": "5.102.3",
+      },
     },
   ],
   "files": [
@@ -28,6 +34,7 @@
           "target": "labbytv",
           "exclusions": [
             "Info.plist",
+            "Secrets.xcconfig",
           ],
         },
       ],
@@ -53,6 +60,10 @@
       "package-product-members": [
         {
           "product-name": "LabbyVLC",
+          "build-phase": { "build-phase": "frameworks" },
+        }, {
+          "package": "purchases-ios-spm",
+          "product-name": "RevenueCat",
           "build-phase": { "build-phase": "frameworks" },
         },
       ],

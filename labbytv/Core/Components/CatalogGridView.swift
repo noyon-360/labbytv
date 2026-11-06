@@ -13,12 +13,16 @@ struct CatalogGridView<Item: CatalogItem, Cell: View>: View {
             CategoryChips(
                 categories: viewModel.categories,
                 selected: viewModel.selectedCategory,
+                isLocked: viewModel.isLocked,
                 onSelect: { category in Task { await viewModel.select(category) } }
             )
 
             content
         }
         .task { await viewModel.loadIfNeeded() }
+        .onChange(of: viewModel.parentalLockChangeCount) {
+            Task { await viewModel.applyParentalLockChanges() }
+        }
     }
 
     @ViewBuilder

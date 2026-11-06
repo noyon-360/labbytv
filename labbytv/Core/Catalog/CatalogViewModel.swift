@@ -20,18 +20,37 @@ final class CatalogViewModel<Item: CatalogItem> {
     private(set) var errorMessage: String?
 
     @ObservationIgnored private let repository: any CatalogRepository
+    @ObservationIgnored private let parentalLock: ParentalLockService?
     @ObservationIgnored private var nextPage = 1
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var seenLockChange = 0
+    @ObservationIgnored private var seenLockReveal = 0
 
-    init(type: ContentType, repository: any CatalogRepository, pageSize: Int = 48) {
+    /// When "All" is mostly locked, a page can filter down to nothing; fetch a
+    /// few more pages before showing the empty state.
+    private static var maxEmptyPageSkips: Int { 5 }
+
+    init(type: ContentType, repository: any CatalogRepository, parentalLock: ParentalLockService? = nil, pageSize: Int = 48) {
         self.type = type
         self.repository = repository
+        self.parentalLock = parentalLock
         self.pageSize = pageSize
+        seenLockChange = parentalLock?.changeCount ?? 0
+        seenLockReveal = parentalLock?.revealCount ?? 0
+    }
+
+    /// Observed by the view so lock changes apply while the grid is on screen.
+    var parentalLockChangeCount: Int { parentalLock?.changeCount ?? 0 }
+
+    /// Shows a lock on chips the PIN hasn't opened this session.
+    func isLocked(_ category: Category) -> Bool {
+        parentalLock?.isHidden(type, categoryID: category.id) ?? false
     }
 
     /// Returning to the tab keeps what was loaded. If the first load was
     /// cancelled (view left early), the next appearance tries again.
     func loadIfNeeded() async {
+        await applyParentalLockChanges()
         guard items.isEmpty, !isLoading else { return }
         async let categoriesTask: Void = loadCategories()
         async let itemsTask: Void = reload()
@@ -40,6 +59,9 @@ final class CatalogViewModel<Item: CatalogItem> {
 
     func select(_ category: Category) async {
         guard category != selectedCategory || errorMessage != nil else { return }
+        guard await parentalLock?.guardCategory(type, categoryID: category.id) ?? true else { return }
+        // The reload below filters with the current locks.
+        markLockChangesSeen()
         selectedCategory = category
         await reload()
     }
@@ -69,20 +91,61 @@ final class CatalogViewModel<Item: CatalogItem> {
         items = []
 
         do {
-            let page: [Item] = try await fetch(page: 1)
+            var page: [Item] = try await fetch(page: 1)
             guard current == generation else { return }
-            items = Self.merge(existing: [], incoming: page)
             hasMore = page.count >= pageSize
             nextPage = 2
+            items = Self.merge(existing: [], incoming: visible(page))
+            var skips = 0
+            while items.isEmpty, hasMore, skips < Self.maxEmptyPageSkips {
+                skips += 1
+                page = try await fetch(page: nextPage)
+                guard current == generation else { return }
+                hasMore = page.count >= pageSize
+                nextPage += 1
+                items = Self.merge(existing: items, incoming: visible(page))
+            }
         } catch is CancellationError {
             // A newer load or the view disappearing cancelled this one.
         } catch {
             guard current == generation else { return }
-            errorMessage = (error as? APIError)?.userMessage ?? APIError.unknown.userMessage
+            if items.isEmpty {
+                errorMessage = (error as? APIError)?.userMessage ?? APIError.unknown.userMessage
+            }
         }
         if current == generation {
             isLoading = false
         }
+    }
+
+    /// Applies parental-lock changes made since the last call: leave a
+    /// category that just got locked, drop newly locked items, or reload when
+    /// something was revealed (filtered-out items can't come back without a fetch).
+    func applyParentalLockChanges() async {
+        guard let parentalLock, parentalLock.changeCount != seenLockChange else { return }
+        let reveals = parentalLock.revealCount != seenLockReveal
+        markLockChangesSeen()
+        // Never loaded yet: the first load filters anyway.
+        guard !items.isEmpty || isLoading || errorMessage != nil else { return }
+
+        if parentalLock.isHidden(type, categoryID: selectedCategory.id) {
+            selectedCategory = .all
+            await reload()
+        } else if reveals {
+            await reload()
+        } else {
+            items = visible(items)
+        }
+    }
+
+    private func markLockChangesSeen() {
+        seenLockChange = parentalLock?.changeCount ?? 0
+        seenLockReveal = parentalLock?.revealCount ?? 0
+    }
+
+    private func visible(_ list: [Item]) -> [Item] {
+        guard let parentalLock else { return list }
+        return list.filter { !parentalLock.isHidden(type, categoryID: $0.categoryId) }
     }
 
     private func loadMore() async {
@@ -92,7 +155,8 @@ final class CatalogViewModel<Item: CatalogItem> {
         do {
             let page: [Item] = try await fetch(page: nextPage)
             guard current == generation else { return }
-            items = Self.merge(existing: items, incoming: page)
+            // Paging follows the raw page size, not what's left after filtering.
+            items = Self.merge(existing: items, incoming: visible(page))
             hasMore = page.count >= pageSize
             nextPage += 1
         } catch {

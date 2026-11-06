@@ -16,6 +16,8 @@ struct Shelf<Content: View>: View {
                 }
                 .padding(.vertical, Spacing.m)
             }
+            // LazyHStack is vertically greedy; keep the shelf at card height.
+            .fixedSize(horizontal: false, vertical: true)
             .scrollClipDisabled()
         }
         .focusSection()

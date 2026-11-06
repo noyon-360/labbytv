@@ -39,7 +39,11 @@ final class PaywallViewModel {
                 // RevenueCat's webhook updates the backend; refresh the profile
                 // so the backend-side status matches.
                 await onPurchased()
-                successMessage = "Welcome to LABBY TV Pro!"
+                successMessage = if let trial = package.trial {
+                    "Your \(trial.label) has started 🎉 Enjoy LABBY TV Pro. Cancel anytime before it ends and you won't be charged."
+                } else {
+                    "Welcome to LABBY TV Pro!"
+                }
             }
         } catch {
             errorMessage = "The purchase didn't go through. \(error.localizedDescription)"

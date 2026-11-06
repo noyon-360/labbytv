@@ -15,7 +15,11 @@ struct HomeView: View {
             }
         }
         .task {
+            await viewModel.applyParentalLockChanges()
             if viewModel.isEmpty { await viewModel.load() }
+        }
+        .onChange(of: viewModel.parentalLockChangeCount) {
+            Task { await viewModel.applyParentalLockChanges() }
         }
         // Refresh Continue Watching when the player closes.
         .onChange(of: player.current) { old, new in

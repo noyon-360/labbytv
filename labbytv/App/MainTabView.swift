@@ -20,17 +20,19 @@ struct MainTabView: View {
         self.environment = environment
         player = environment.playerPresenter
         let catalog = environment.catalogRepository
-        _home = State(initialValue: HomeViewModel(catalog: catalog, history: environment.historyRepository, preferences: environment.preferences))
-        _live = State(initialValue: CatalogViewModel(type: .channels, repository: catalog))
-        _guide = State(initialValue: GuideViewModel(channels: CatalogViewModel(type: .channels, repository: catalog, pageSize: 30), cache: environment.epgCache))
-        _movies = State(initialValue: CatalogViewModel(type: .movies, repository: catalog))
-        _series = State(initialValue: CatalogViewModel(type: .series, repository: catalog))
-        _search = State(initialValue: SearchViewModel(catalog: catalog))
+        let lock = environment.parentalLock
+        _home = State(initialValue: HomeViewModel(catalog: catalog, history: environment.historyRepository, preferences: environment.preferences, parentalLock: lock))
+        _live = State(initialValue: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock))
+        _guide = State(initialValue: GuideViewModel(channels: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock, pageSize: 30), cache: environment.epgCache))
+        _movies = State(initialValue: CatalogViewModel(type: .movies, repository: catalog, parentalLock: lock))
+        _series = State(initialValue: CatalogViewModel(type: .series, repository: catalog, parentalLock: lock))
+        _search = State(initialValue: SearchViewModel(catalog: catalog, parentalLock: lock))
         _profile = State(initialValue: ProfileViewModel(environment: environment))
     }
 
     var body: some View {
         tabs
+            .pinPrompt(environment.parentalLock)
             .fullScreenCover(item: $player.current) { item in
                 PlayerView(
                     viewModel: PlayerViewModel(item: item, catalog: environment.catalogRepository, history: environment.historyRepository, preferences: environment.preferences),

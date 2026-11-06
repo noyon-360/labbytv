@@ -21,6 +21,9 @@ nonisolated struct APIEndpoint: Sendable, Equatable {
 
     // MARK: User
     static let profile = APIEndpoint(path: "/user/profile")
+    /// Parental lock "Forgot PIN?": `{ password }` → `{ valid }`. Answers 200
+    /// even for a wrong password, because a 401 would log the user out.
+    static let verifyPassword = APIEndpoint(path: "/user/verify-password")
 
     // MARK: Playlist
     static let addPlaylist = APIEndpoint(path: "/playlist/add-playlist")

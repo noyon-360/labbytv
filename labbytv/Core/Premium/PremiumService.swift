@@ -19,6 +19,21 @@ final class PremiumService {
 
     var isPremium: Bool { hasEntitlement || backendSubscriptionActive }
 
+    /// Store side (instant after purchase) and backend side (bought on another
+    /// device). Either can say the current period is a free trial.
+    private(set) var entitlementInTrial = false
+    private(set) var backendInTrial = false
+    private(set) var entitlementExpiresAt: Date?
+    private(set) var backendExpiresAt: Date?
+
+    var isInFreeTrial: Bool { isPremium && (entitlementInTrial || backendInTrial) }
+
+    /// When the trial (or current period) ends, for "Trial ends 14 Nov".
+    var currentPeriodEndsAt: Date? { entitlementExpiresAt ?? backendExpiresAt }
+
+    /// A free trial this user can still start on some plan.
+    var availableFreeTrial: FreeTrialOffer? { packages.lazy.compactMap(\.trial).first }
+
     /// False until the RevenueCat package and API key are set up.
     private(set) var isPurchasingAvailable = false
 
@@ -58,6 +73,10 @@ final class PremiumService {
     func logOut() async {
         hasEntitlement = false
         backendSubscriptionActive = false
+        entitlementInTrial = false
+        backendInTrial = false
+        entitlementExpiresAt = nil
+        backendExpiresAt = nil
         #if canImport(RevenueCat)
         guard isPurchasingAvailable, !Purchases.shared.isAnonymous else { return }
         _ = try? await Purchases.shared.logOut()
@@ -66,7 +85,12 @@ final class PremiumService {
 
     func update(from user: User?) {
         guard let user else { return }
-        backendSubscriptionActive = user.hasActiveSubscription() || user.plan == "premium"
+        // Same rule as Flutter `PremiumService._fromBackend`: plan AND a live
+        // period. `plan` alone stays "premium" for up to a day after expiry
+        // (the backend downgrades in a daily job), so it can't stand alone.
+        backendSubscriptionActive = user.plan == "premium" && user.hasActiveSubscription()
+        backendInTrial = user.isOnFreeTrial()
+        backendExpiresAt = user.expiresAt
     }
 
     func loadPackages() async throws {
@@ -75,12 +99,23 @@ final class PremiumService {
         let offerings = try await Purchases.shared.offerings()
         let available = offerings.current?.availablePackages ?? []
         rcPackages = Dictionary(available.map { ($0.identifier, $0) }, uniquingKeysWith: { first, _ in first })
-        packages = available.map { package in
+        // The product always carries its intro offer, even for users who
+        // already used a trial, so ask StoreKit who is eligible before
+        // advertising it. Unknown counts as not eligible.
+        let eligibility = await Purchases.shared.checkTrialOrIntroDiscountEligibility(packages: available)
+        // Shortest plan first (monthly, quarterly, yearly), as on the phone.
+        let sorted = available.sorted {
+            (Self.billingPeriod($0)?.approximateDays ?? .max) < (Self.billingPeriod($1)?.approximateDays ?? .max)
+        }
+        packages = sorted.map { package in
             PremiumPackage(
                 id: package.identifier,
                 title: package.storeProduct.localizedTitle,
                 price: package.storeProduct.localizedPriceString,
-                period: Self.periodText(package.packageType)
+                period: Self.billingPeriod(package)?.text ?? Self.periodText(package.packageType),
+                trial: eligibility[package]?.status == .eligible
+                    ? Self.freeTrial(package.storeProduct.introductoryDiscount)
+                    : nil
             )
         }
         #endif
@@ -114,7 +149,31 @@ final class PremiumService {
     }
 
     private func apply(_ info: CustomerInfo) {
-        hasEntitlement = info.entitlements[Self.entitlementID]?.isActive == true
+        let entitlement = info.entitlements[Self.entitlementID]
+        hasEntitlement = entitlement?.isActive == true
+        entitlementInTrial = hasEntitlement && entitlement?.periodType == .trial
+        entitlementExpiresAt = hasEntitlement ? entitlement?.expirationDate : nil
+    }
+
+    private static func freeTrial(_ discount: StoreProductDiscount?) -> FreeTrialOffer? {
+        guard let discount, discount.paymentMode == .freeTrial,
+              let unit = unit(discount.subscriptionPeriod.unit) else { return nil }
+        return FreeTrialOffer(unit: unit, count: discount.subscriptionPeriod.value * max(discount.numberOfPeriods, 1))
+    }
+
+    private static func billingPeriod(_ package: Package) -> BillingPeriod? {
+        guard let period = package.storeProduct.subscriptionPeriod, let unit = unit(period.unit) else { return nil }
+        return BillingPeriod(unit: unit, value: period.value)
+    }
+
+    private static func unit(_ unit: SubscriptionPeriod.Unit) -> FreeTrialOffer.Unit? {
+        switch unit {
+        case .day: .day
+        case .week: .week
+        case .month: .month
+        case .year: .year
+        @unknown default: nil
+        }
     }
 
     private static func periodText(_ type: PackageType) -> String {

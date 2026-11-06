@@ -17,6 +17,20 @@ final class Preferences {
         set { defaults.set(newValue.rawValue, forKey: aspectModeKey) }
     }
 
+    /// Parental lock: locked Xtream category ids. Stored per content type
+    /// because Xtream category ids are only unique within one type.
+    func lockedCategoryIDs(for type: ContentType) -> Set<String> {
+        Set(defaults.stringArray(forKey: lockedKey(type)) ?? [])
+    }
+
+    func setLockedCategoryIDs(_ ids: Set<String>, for type: ContentType) {
+        defaults.set(ids.sorted(), forKey: lockedKey(type))
+    }
+
+    private func lockedKey(_ type: ContentType) -> String {
+        "parental.locked.\(type.rawValue)"
+    }
+
     func episodeContext(for episodeID: String) -> EpisodeContext? {
         loadEpisodeContexts()[episodeID]?.context
     }

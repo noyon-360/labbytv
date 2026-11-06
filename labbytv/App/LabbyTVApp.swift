@@ -4,6 +4,7 @@ import os
 @main
 struct LabbyTVApp: App {
     @State private var environment: AppEnvironment
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // AsyncImage goes through URLSession.shared; a bigger cache keeps
@@ -29,6 +30,13 @@ struct LabbyTVApp: App {
                     // load the profile (subscription status, name).
                     if environment.session.isLoggedIn {
                         await environment.didSignIn()
+                    }
+                }
+                // Every PIN unlock ends when the user leaves the app (Flutter
+                // relocks on `AppLifecycleState.paused`).
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background {
+                        environment.parentalLock.relock()
                     }
                 }
         }

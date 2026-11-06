@@ -5,6 +5,8 @@ nonisolated protocol CatalogItem: Decodable, Sendable, Identifiable, Hashable wh
     var id: Int { get }
     var title: String { get }
     var imageURL: URL? { get }
+    /// Xtream category, used by the parental lock to hide locked items.
+    var categoryId: String { get }
 }
 
 nonisolated extension URL {

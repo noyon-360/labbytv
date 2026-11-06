@@ -18,11 +18,36 @@ final class HomeViewModel {
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
     @ObservationIgnored private let preferences: Preferences
+    @ObservationIgnored private let parentalLock: ParentalLockService?
+    @ObservationIgnored private var seenLockChange = 0
+    @ObservationIgnored private var seenLockReveal = 0
 
-    init(catalog: any CatalogRepository, history: any WatchHistoryRepository, preferences: Preferences) {
+    init(catalog: any CatalogRepository, history: any WatchHistoryRepository, preferences: Preferences, parentalLock: ParentalLockService? = nil) {
         self.catalog = catalog
         self.history = history
         self.preferences = preferences
+        self.parentalLock = parentalLock
+        seenLockChange = parentalLock?.changeCount ?? 0
+        seenLockReveal = parentalLock?.revealCount ?? 0
+    }
+
+    /// Observed by the view so lock changes apply while Home is on screen.
+    var parentalLockChangeCount: Int { parentalLock?.changeCount ?? 0 }
+
+    /// Locked categories stay out of the shelves (Flutter: "hidden from All,
+    /// Home and Search"). Revealing needs a reload; hiding only a filter.
+    func applyParentalLockChanges() async {
+        guard let parentalLock, parentalLock.changeCount != seenLockChange else { return }
+        let reveals = parentalLock.revealCount != seenLockReveal
+        seenLockChange = parentalLock.changeCount
+        seenLockReveal = parentalLock.revealCount
+        guard hasLoaded else { return }
+        if reveals {
+            await load()
+        } else {
+            movies = movies.filter { !parentalLock.isHidden(.movies, categoryID: $0.categoryId) }
+            series = series.filter { !parentalLock.isHidden(.series, categoryID: $0.categoryId) }
+        }
     }
 
     var isEmpty: Bool { continueWatching.isEmpty && movies.isEmpty && series.isEmpty }
@@ -40,13 +65,18 @@ final class HomeViewModel {
         async let seriesTask: [Series] = catalog.items(.series, categoryID: nil, search: nil, page: 1, limit: 30)
 
         var firstError: Error?
-        do { movies = Self.uniqueByName(try await moviesTask) } catch { firstError = error }
-        do { series = Self.uniqueByName(try await seriesTask) } catch { firstError = firstError ?? error }
+        do { movies = Self.uniqueByName(visible(try await moviesTask, .movies)) } catch { firstError = error }
+        do { series = Self.uniqueByName(visible(try await seriesTask, .series)) } catch { firstError = firstError ?? error }
         continueWatching = Self.continueWatching(from: await historyTask ?? [], preferences: preferences)
 
         if isEmpty, let firstError, !(firstError is CancellationError) {
             errorMessage = (firstError as? APIError)?.userMessage ?? APIError.unknown.userMessage
         }
+    }
+
+    private func visible<Item: CatalogItem>(_ items: [Item], _ type: ContentType) -> [Item] {
+        guard let parentalLock else { return items }
+        return items.filter { !parentalLock.isHidden(type, categoryID: $0.categoryId) }
     }
 
     /// Unfinished movies, plus episodes this TV knows the series for.
