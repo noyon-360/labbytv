@@ -103,6 +103,41 @@ View  →  ViewModel (@Observable, @MainActor)  →  Repository (protocol)  → 
 
 ---
 
+## Login screen with welcome text (first screen when logged out)
+
+`Features/Auth/Views/LoginView.swift`. `AppRouter` shows it whenever there is no token. It matches the Flutter Android TV login page, so read `lib/features/auth/screens/login_screen.dart` (the `isTv` branch) and `lib/features/auth/widgets/login_welcome_intro.dart` in the Flutter repo first.
+
+**Welcome text at the top of the login page.** Use this copy **word for word** in `Features/Auth/Views/LoginWelcomeIntro.swift`:
+
+> **Welcome to LABBY TV**
+>
+> To get started, create a free LABBY TV account. Once registered, you can sign in and add your IPTV provider's playlist to start watching your content.
+>
+> Already have an account? Simply sign in to continue.
+
+**Layout (same as Flutter TV):**
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Welcome to LABBY TV                      │
+│        To get started, create a free LABBY TV account…       │
+│     Already have an account? Simply sign in to continue.     │
+├────────────────────────────┬───┬─────────────────────────────┤
+│  QR sign-in panel          │   │  Sign in with email         │
+│  (scan with phone app)     │OR │  [ Email              ]     │
+│  ← default focus           │   │  [ Password           ]     │
+│                            │   │            Forget Password  │
+│                            │   │  [        Login        ]    │
+│                            │   │  Don't have an account?     │
+│                            │   │  Sign Up                    │
+└────────────────────────────┴───┴─────────────────────────────┘
+```
+- **Default focus goes to the QR panel,** because typing a password with the Siri Remote is slow. Each column is a `.focusSection()`, so swiping left and right moves between them.
+- **Sign Up** → `RegisterView`, **Forget Password** → `ForgotPasswordView`. Back from either returns to the login page. Back on the login page exits the app (system behaviour).
+- Keep the welcome text centred, with a max width of about 1100 pt, inside the TV safe area.
+- Why the wording matters: it makes clear that LABBY TV doesn't supply any content and users bring their own provider's playlist. Apple's App Review checks this for IPTV apps, so don't shorten or reword it without the user's OK.
+
+---
+
 ## Rules
 
 - **Follow `FOLDER_STRUCTURE.md`.** One type per file, and the file name matches the type. Views end in `View`, view models in `ViewModel`, repositories in `Repository`.
@@ -152,7 +187,7 @@ Copy this into `docs/PROGRESS.md` on the first "start coding".
 - [ ] `APIClient` + `APIResponse` + `APIError` + token refresh
 - [ ] `KeychainStore` + `SessionStore`
 - [ ] `AppEnvironment` + `AppRouter`
-- [ ] Login screen
+- [ ] Login screen with welcome text (exact copy + layout, see "Login screen with welcome text"); email form first, QR panel in Phase 3
 - [ ] Playlist fetch + picker
 - [ ] Live channels, first page
 - [ ] Full-screen player (`AVPlayerViewController`)

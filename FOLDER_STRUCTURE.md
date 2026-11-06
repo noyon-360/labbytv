@@ -30,7 +30,7 @@ labbytv/                              ← repo root
 │   ├── App/
 │   │   ├── LabbyTVApp.swift          ← @main entry, sets up AppEnvironment
 │   │   ├── AppEnvironment.swift      ← builds & holds shared services (DI container)
-│   │   ├── AppRouter.swift           ← decides: Login → Playlist picker → Main tabs
+│   │   ├── AppRouter.swift           ← decides: Login (with welcome text) → Playlist picker → Main tabs
 │   │   └── MainTabView.swift         ← sidebar/top tabs: Home, Live, Guide, Movies, Series, Search, Profile
 │   │
 │   ├── Core/
@@ -85,7 +85,7 @@ labbytv/                              ← repo root
 │   │   │   ├── Models/        LoginRequest.swift, LoginResponse.swift, RegisterRequest.swift
 │   │   │   ├── Repository/    AuthRepository.swift
 │   │   │   ├── ViewModels/    LoginViewModel.swift, RegisterViewModel.swift, ForgotPasswordViewModel.swift
-│   │   │   └── Views/         LoginView.swift, RegisterView.swift, ForgotPasswordView.swift, TVLoginQRView.swift
+│   │   │   └── Views/         LoginView.swift, LoginWelcomeIntro.swift, RegisterView.swift, ForgotPasswordView.swift, TVLoginQRView.swift
 │   │   │
 │   │   ├── Playlist/
 │   │   │   ├── Models/        Playlist.swift
@@ -165,7 +165,7 @@ Build settings live outside Swift code. `Secrets.xcconfig` holds the **RevenueCa
 ### `App/`
 Startup and navigation only, no business logic.
 - `AppEnvironment` creates `APIClient`, `KeychainStore`, `SessionStore`, `PremiumService` once and passes them down with `.environment(...)`. Flutter equivalent: `core/di/`.
-- `AppRouter` watches `SessionStore`: no token → Login, no active playlist → Playlist picker, otherwise → `MainTabView`.
+- `AppRouter` watches `SessionStore`: no token → Login (welcome text on top, QR + email sign-in, Sign Up link), no active playlist → Playlist picker, otherwise → `MainTabView`.
 
 ### `Core/`
 Code that every feature uses.
