@@ -48,3 +48,18 @@ Ticked = built, compiles clean in Swift 5 **and** Swift 6 language mode with no 
 - Watch history stores only the episode id for series, so "Continue Watching" can resume an episode only if it was last played on this Apple TV (the TV remembers series id and extension locally in `Preferences`). Same limit as the Flutter app.
 - The Flutter repos for Live/Movies/Series/Genre/Search are merged into one `CatalogRepository` + generic `CatalogViewModel` (same endpoints and body).
 - Out of scope, not built: parental lock, EPG reminders, watch later, downloads, notifications, announcements.
+
+## VLC playback for MKV (added 2026-11-06, approved by user)
+- [x] `Packages/LabbyVLC`: local Swift package wrapping official VideoLAN **TVVLCKit 3.7.4** (LGPLv2.1, archive SHA-256 verified). Binary is git-ignored; `scripts/fetch-vlckit.sh` downloads and verifies it. Package builds for tvOS in Swift 6 mode.
+- [x] App side: `PlayerViewModel` picks VLC for containers AVPlayer can't open (mkv, avi, …), AVPlayer for m3u8/mp4/mov. `Core/Player/VLCPlayerView.swift`: Siri Remote controls (Play/Pause, ±10 s, Audio, Subtitles, Menu hides then closes). Resume + 10 s progress sync work for both engines. "Open Source Licenses" page in Profile credits VLCKit.
+- [x] Package linked in Xcode (2026-11-06). App builds clean in Swift 5 and 6 with VLC compiled in; `TVVLCKit.framework` is embedded.
+- [ ] Test an MKV movie in the simulator, then on a real Apple TV (smoothness, 4K, subtitles).
+- Note: VLC does its own networking, so ATS doesn't block VLC streams. AVPlayer (live TV) and poster images still need `Allow Arbitrary Loads`.
+
+### Provider findings (2026-11-06, labmax.live account, tested with curl from the dev Mac)
+- Account: Active, expires 2027-09-21, 0/5 connections. Allowed outputs: ts, m3u8, rtmp.
+- Every stream URL redirects twice (labmax.live → https → a CDN); each attempt took ~70–95 s.
+- **Live** (`/live/…m3u8` → prolab.vip): 403 with default/curl user agent, **200 with `Lavf/60.3.100`** (the Android player's UA). Both players now send that UA.
+- **Movies** (`/movie/…mkv` → stream.m8tricks.net/vod-api): **403 "This stream URL requires a signed token"** with every UA tried. Provider-side; no client can play it without that token. Need to confirm whether the Android app plays the same movie (227749095 / 230169080).
+- **Root cause of slow starts (2026-11-06):** labmax.live resolves to two Cloudflare IPs; `104.21.37.228` is unreachable from the dev network, `172.67.214.171` answers in 0.09 s. VLC tries addresses one by one (~45 s timeout per redirect hop, ~3 min total). Fix: `Core/Player/StreamURLResolver.swift` follows redirects with URLSession (races addresses) and hands VLC the final CDN URL. Measured: 222312851 → 2.3 s (206, MKV); 227749095 → 2.9 s (403, shown as "provider refused").
+- Not yet verified: VLC drawing video in the simulator (earlier log showed `h264 get_buffer() failed / no frame!`). May need a real Apple TV.

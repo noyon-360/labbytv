@@ -11,6 +11,9 @@ final class HomeViewModel {
     private(set) var series: [Series] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    /// False until the first `load()` finishes. Without it the view renders the
+    /// empty state for the frames before `.task` starts the first fetch.
+    private(set) var hasLoaded = false
 
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
@@ -27,7 +30,10 @@ final class HomeViewModel {
     func load() async {
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
 
         async let historyTask = try? history.history(page: 1, limit: 30)
         async let moviesTask: [Movie] = catalog.items(.movies, categoryID: nil, search: nil, page: 1, limit: 30)

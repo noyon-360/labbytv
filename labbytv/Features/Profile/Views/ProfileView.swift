@@ -26,6 +26,7 @@ struct ProfileView: View {
                     }
                     row("Privacy Policy", symbol: "hand.raised.fill", route: .legal(.privacy))
                     row("Terms & Conditions", symbol: "doc.text.fill", route: .legal(.terms))
+                    row("Open Source Licenses", symbol: "chevron.left.forwardslash.chevron.right", route: .legal(.licenses))
 
                     Button(role: .destructive) {
                         confirmingSignOut = true

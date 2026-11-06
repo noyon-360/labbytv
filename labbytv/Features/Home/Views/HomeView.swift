@@ -6,8 +6,8 @@ struct HomeView: View {
 
     var body: some View {
         Group {
-            if viewModel.isLoading && viewModel.isEmpty {
-                LoadingView()
+            if viewModel.isEmpty && (viewModel.isLoading || !viewModel.hasLoaded) {
+                LoadingView(message: "Loading your playlist…")
             } else if let message = viewModel.errorMessage {
                 ErrorView(message: message, retry: { Task { await viewModel.load() } })
             } else {

@@ -10,9 +10,11 @@ struct LegalTextView: View {
             VStack(alignment: .leading, spacing: Spacing.l) {
                 Text(document.title)
                     .font(AppFonts.title)
-                Text(LegalDocument.lastUpdated)
-                    .font(AppFonts.caption)
-                    .foregroundStyle(AppColors.textSecondary)
+                if document != .licenses {
+                    Text(LegalDocument.lastUpdated)
+                        .font(AppFonts.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
 
                 ForEach(document.sections, id: \.heading) { section in
                     VStack(alignment: .leading, spacing: Spacing.s) {

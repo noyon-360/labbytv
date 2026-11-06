@@ -7,3 +7,8 @@ DerivedData/
 *.xcuserstate
 .DS_Store
 build/
+
+# VLCKit binary (fetched by scripts/fetch-vlckit.sh)
+Packages/LabbyVLC/Frameworks/
+Packages/LabbyVLC/.build/
+Packages/LabbyVLC/.swiftpm/

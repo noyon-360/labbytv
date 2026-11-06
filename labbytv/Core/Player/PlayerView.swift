@@ -17,12 +17,7 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            PlayerSurface(
-                player: viewModel.player,
-                allowsChannelSwitching: viewModel.canSwitchChannels,
-                onChannelStep: { step in Task { await viewModel.switchChannel(by: step) } }
-            )
-            .ignoresSafeArea()
+            surface
 
             switch viewModel.state {
             case .loading:
@@ -40,6 +35,32 @@ struct PlayerView: View {
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
         .onExitCommand(perform: onClose)
+        .onChange(of: viewModel.didFinish) {
+            if viewModel.didFinish { onClose() }
+        }
+    }
+
+    @ViewBuilder
+    private var surface: some View {
+        #if canImport(LabbyVLC)
+        if viewModel.backend == .vlc, let engine = viewModel.vlc {
+            // VLCPlayerView handles Menu itself (hide controls, then close).
+            VLCPlayerView(engine: engine, title: viewModel.item.title, onClose: onClose)
+        } else {
+            avSurface
+        }
+        #else
+        avSurface
+        #endif
+    }
+
+    private var avSurface: some View {
+        PlayerSurface(
+            player: viewModel.player,
+            allowsChannelSwitching: viewModel.canSwitchChannels,
+            onChannelStep: { step in Task { await viewModel.switchChannel(by: step) } }
+        )
+        .ignoresSafeArea()
     }
 
     private var overlays: some View {

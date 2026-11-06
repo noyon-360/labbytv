@@ -54,3 +54,20 @@ struct ATSConfigTests {
         #expect(!PlayerViewModel.allowsInsecureMedia(infoDictionary: ["NSAppTransportSecurity": ["NSAllowsArbitraryLoads": false]]))
     }
 }
+
+struct BackendChoiceTests {
+    @Test func mkvGoesToVLCAndHLSStaysOnAVPlayer() {
+        #expect(PlayerViewModel.needsVLC(extension: "mkv"))
+        #expect(PlayerViewModel.needsVLC(extension: "AVI"))
+        #expect(!PlayerViewModel.needsVLC(extension: "m3u8"))
+        #expect(!PlayerViewModel.needsVLC(extension: "mp4"))
+        #expect(!PlayerViewModel.needsVLC(extension: ""))
+    }
+}
+
+struct ProviderFailureMessageTests {
+    @Test func refusalMentionsStatus() {
+        #expect(PlayerViewModel.message(for: .refused(status: 403)).contains("403"))
+        #expect(PlayerViewModel.message(for: .notFound).contains("no longer"))
+    }
+}

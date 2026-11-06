@@ -3,6 +3,9 @@ import AVKit
 import Foundation
 import Observation
 import os
+#if canImport(LabbyVLC)
+import LabbyVLC
+#endif
 
 @MainActor
 @Observable
@@ -13,12 +16,27 @@ final class PlayerViewModel {
         case failed(String)
     }
 
+    /// AVPlayer for HLS/MP4 (native tvOS controls); VLC for containers
+    /// AVPlayer can't open, such as the MKV most Xtream VOD uses.
+    enum Backend: Equatable {
+        case avPlayer
+        case vlc
+    }
+
     private(set) var item: PlayableItem
     private(set) var state: State = .loading
+    private(set) var backend: Backend = .avPlayer
+    /// Set when a VLC stream reaches the end, so the view can close.
+    private(set) var didFinish = false
     /// Shown briefly after a channel change.
     private(set) var channelBanner: Channel?
 
     let player = AVPlayer()
+    #if canImport(LabbyVLC)
+    /// Created on first use: VLC's engine is heavy and live TV never needs it.
+    private(set) var vlc: VLCPlaybackEngine?
+    @ObservationIgnored private var vlcTask: Task<Void, Never>?
+    #endif
 
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
@@ -69,6 +87,9 @@ final class PlayerViewModel {
         await syncProgress()
         teardown()
         player.replaceCurrentItem(with: nil)
+        #if canImport(LabbyVLC)
+        vlc?.stop()
+        #endif
     }
 
     // MARK: Loading
@@ -79,6 +100,7 @@ final class PlayerViewModel {
         teardown()
         state = .loading
         pendingSeek = nil
+        didFinish = false
 
         do {
             let url = try await resolveURL(for: item)
@@ -91,7 +113,28 @@ final class PlayerViewModel {
                 guard generation == loadGeneration else { return }
             }
 
-            let playerItem = AVPlayerItem(url: url)
+            #if canImport(LabbyVLC)
+            if !item.isLive && Self.needsVLC(extension: streamExtension) {
+                let finalURL: URL
+                do {
+                    finalURL = try await StreamURLResolver.resolve(url, userAgent: Self.streamUserAgent)
+                } catch let failure as StreamURLResolver.Failure {
+                    guard generation == loadGeneration else { return }
+                    Logger.player.error("Stream test: \(self.logType(for: item), privacy: .public) .\(self.streamExtension, privacy: .public) → provider \(String(describing: failure), privacy: .public)")
+                    state = .failed(Self.message(for: failure))
+                    return
+                }
+                guard generation == loadGeneration else { return }
+                startVLC(url: finalURL, generation: generation)
+                return
+            }
+            #endif
+
+            backend = .avPlayer
+            // Some Xtream panels refuse unknown players (403); identify as the
+            // ffmpeg-based player the Android app uses, which they accept.
+            let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: Self.streamUserAgent])
+            let playerItem = AVPlayerItem(asset: asset)
             playerItem.externalMetadata = metadata(for: item)
             observe(playerItem)
             player.replaceCurrentItem(with: playerItem)
@@ -107,6 +150,87 @@ final class PlayerViewModel {
             state = .failed((error as? APIError)?.userMessage ?? APIError.unknown.userMessage)
         }
     }
+
+    /// Containers AVPlayer can open. Anything else goes to VLC (when linked).
+    nonisolated static let avPlayerExtensions: Set<String> = ["m3u8", "mp4", "m4v", "mov", "m4a", "mp3", "aac"]
+
+    nonisolated static func needsVLC(extension ext: String) -> Bool {
+        !ext.isEmpty && !avPlayerExtensions.contains(ext.lowercased())
+    }
+
+    #if canImport(LabbyVLC)
+    private func startVLC(url: URL, generation: Int) {
+        backend = .vlc
+        #if DEBUG
+        if vlc == nil { VLCPlaybackEngine.enableDebugLogging() }
+        #endif
+        let engine = vlc ?? VLCPlaybackEngine()
+        vlc = engine
+        engine.load(url: url, startAt: pendingSeek, userAgent: Self.streamUserAgent)
+        pendingSeek = nil
+
+        let type = logType(for: item)
+        let ext = streamExtension
+        // Polls instead of observing: two cheap reads twice a second, and it
+        // also drives the 10-second progress sync, which needs a clock anyway.
+        vlcTask = Task { [weak self] in
+            var lastSync = Date.now
+            var reportedPlaying = false
+            let startedAt = Date.now
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, generation == self.loadGeneration, let engine = self.vlc else { return }
+                switch engine.status {
+                case .playing, .paused:
+                    if !reportedPlaying {
+                        reportedPlaying = true
+                        Logger.player.notice("Stream test: \(type, privacy: .public) .\(ext, privacy: .public) via VLC → plays")
+                    }
+                    self.state = .playing
+                    if Date.now.timeIntervalSince(lastSync) >= Self.syncInterval {
+                        lastSync = .now
+                        await self.syncProgress()
+                    }
+                case .failed:
+                    Logger.player.error("Stream test: \(type, privacy: .public) .\(ext, privacy: .public) via VLC → failed")
+                    self.state = .failed(Self.vlcFailureMessage)
+                    return
+                case .ended:
+                    await self.syncProgress()
+                    self.didFinish = true
+                    return
+                case .idle, .opening, .buffering:
+                    // Don't spin forever on a dead or very slow server.
+                    if !reportedPlaying && Date.now.timeIntervalSince(startedAt) > Self.vlcStartTimeout {
+                        Logger.player.error("Stream test: \(type, privacy: .public) .\(ext, privacy: .public) via VLC → timed out (status \(String(describing: engine.status), privacy: .public))")
+                        engine.stop()
+                        self.state = .failed("The video took too long to start. The server may be busy or offline.")
+                        return
+                    }
+                }
+            }
+        }
+    }
+    #endif
+
+    /// What media_kit/mpv sends on Android (see Flutter `StreamFailureDiagnosis`).
+    nonisolated static let streamUserAgent = "Lavf/60.3.100"
+
+    /// Redirects are resolved before VLC starts, so this only covers buffering.
+    nonisolated static let vlcStartTimeout: TimeInterval = 60
+
+    nonisolated static func message(for failure: StreamURLResolver.Failure) -> String {
+        switch failure {
+        case .refused(let status):
+            "Your IPTV provider refused this video (HTTP \(status)). It may not be available on your plan right now."
+        case .notFound:
+            "Your IPTV provider no longer has this video."
+        case .unreachable:
+            "Couldn't reach your IPTV provider's server. Please try again."
+        }
+    }
+
+    nonisolated static let vlcFailureMessage = "This video couldn't be played. The stream may be offline or damaged."
 
     private func resolveURL(for item: PlayableItem) async throws -> URL {
         switch item {
@@ -244,9 +368,7 @@ final class PlayerViewModel {
     private func syncProgress() async {
         guard !item.isLive, state == .playing,
               let videoID = historyVideoID(for: item),
-              let current = player.currentItem else { return }
-        let duration = current.duration.seconds
-        let position = player.currentTime().seconds
+              let (position, duration) = playbackTimes() else { return }
         guard duration.isFinite, duration > 0, position.isFinite else { return }
 
         var request: UpdateVideoStatusRequest
@@ -273,6 +395,22 @@ final class PlayerViewModel {
         var request = UpdateVideoStatusRequest(title: channel.name.isEmpty ? "Live TV" : channel.name, videoId: String(channel.id), videoType: "live")
         request.thumbnail = channel.streamIcon.isEmpty ? nil : channel.streamIcon
         try? await history.update(request)
+    }
+
+    /// Position and duration in seconds from whichever engine is playing.
+    private func playbackTimes() -> (Double, Double)? {
+        switch backend {
+        case .avPlayer:
+            guard let current = player.currentItem else { return nil }
+            return (player.currentTime().seconds, current.duration.seconds)
+        case .vlc:
+            #if canImport(LabbyVLC)
+            guard let vlc else { return nil }
+            return (vlc.currentTime, vlc.duration)
+            #else
+            return nil
+            #endif
+        }
     }
 
     // MARK: Helpers
@@ -312,5 +450,9 @@ final class PlayerViewModel {
         timeObserver = nil
         endTask?.cancel()
         endTask = nil
+        #if canImport(LabbyVLC)
+        vlcTask?.cancel()
+        vlcTask = nil
+        #endif
     }
 }
