@@ -15,3 +15,5 @@ Packages/LabbyVLC/.swiftpm/
 
 # Xcode copied the secrets file into the app folder; keep it out of git too.
 labbytv/Secrets.xcconfig
+config.bat
+node_modules
