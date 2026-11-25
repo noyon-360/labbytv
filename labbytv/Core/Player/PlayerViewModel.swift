@@ -28,14 +28,21 @@ final class PlayerViewModel {
     private(set) var backend: Backend = .avPlayer
     /// Set when a VLC stream reaches the end, so the view can close.
     private(set) var didFinish = false
-    /// Shown briefly after a channel change.
+    /// Shown for a few seconds when a channel starts or changes.
     private(set) var channelBanner: Channel?
+    /// True once a stream is handed to AVPlayer or VLC. From then on they
+    /// show their own buffering spinner, so ours must go (client saw two).
+    private(set) var hasStream = false
+    /// Live only: what's on now and next on the current channel.
+    private(set) var nowNext: NowNext?
     /// Kept across videos (saved in Preferences).
     private(set) var aspectMode: VideoAspectMode
     /// VLC only; AVPlayer's speed lives in its own transport bar control.
     private(set) var speed: Float = PlaybackSpeed.normal
 
-    let player = AVPlayer()
+    /// For live TV this is the shared `LivePreview` player when there is one,
+    /// so the guide's mini player keeps the stream after Back.
+    let player: AVPlayer
     #if canImport(LabbyVLC)
     /// Created on first use: VLC's engine is heavy and live TV never needs it.
     private(set) var vlc: VLCPlaybackEngine?
@@ -45,6 +52,10 @@ final class PlayerViewModel {
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
     @ObservationIgnored private let preferences: Preferences
+    @ObservationIgnored private let livePreview: LivePreview?
+    @ObservationIgnored private let favorites: ChannelFavorites?
+    @ObservationIgnored private let epg: EPGCache?
+    @ObservationIgnored private var guideTask: Task<Void, Never>?
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endTask: Task<Void, Never>?
@@ -57,12 +68,38 @@ final class PlayerViewModel {
     /// How often progress is sent to `/watch-history/update` (Flutter uses 10 s).
     private static let syncInterval: Double = 10
 
-    init(item: PlayableItem, catalog: any CatalogRepository, history: any WatchHistoryRepository, preferences: Preferences) {
+    init(
+        item: PlayableItem,
+        catalog: any CatalogRepository,
+        history: any WatchHistoryRepository,
+        preferences: Preferences,
+        livePreview: LivePreview? = nil,
+        favorites: ChannelFavorites? = nil,
+        epg: EPGCache? = nil
+    ) {
         self.item = item
         self.catalog = catalog
         self.history = history
         self.preferences = preferences
+        self.livePreview = item.isLive ? livePreview : nil
+        self.favorites = favorites
+        self.epg = epg
+        self.player = (item.isLive ? livePreview?.player : nil) ?? AVPlayer()
         self.aspectMode = preferences.videoAspectMode
+    }
+
+    // MARK: Favourite channels
+
+    var canFavorite: Bool { item.isLive && favorites != nil }
+
+    var isFavoriteChannel: Bool {
+        guard case .live(let channel, _) = item, let favorites else { return false }
+        return favorites.isFavorite(channel.id)
+    }
+
+    func toggleFavorite() async {
+        guard case .live(let channel, _) = item else { return }
+        await favorites?.toggle(channel)
     }
 
     var canChangeSpeed: Bool { !item.isLive }
@@ -89,6 +126,8 @@ final class PlayerViewModel {
     }
 
     func start() async {
+        if case .live(let channel, _) = item { showBanner(for: channel) }
+        await favorites?.loadIfNeeded()
         await load(item)
     }
 
@@ -109,7 +148,15 @@ final class PlayerViewModel {
     func stop() async {
         await syncProgress()
         teardown()
-        player.replaceCurrentItem(with: nil)
+        guideTask?.cancel()
+        bannerTask?.cancel()
+        if let livePreview {
+            // Leave the stream running for the guide's mini player, unless
+            // it never started.
+            if state != .playing { livePreview.stop() }
+        } else {
+            player.replaceCurrentItem(with: nil)
+        }
         #if canImport(LabbyVLC)
         vlc?.stop()
         #endif
@@ -122,8 +169,23 @@ final class PlayerViewModel {
         let generation = loadGeneration
         teardown()
         state = .loading
+        hasStream = false
         pendingSeek = nil
         didFinish = false
+
+        if case .live(let channel, _) = item {
+            loadGuideInfo(for: channel)
+            // Already playing in the guide's mini player: take it over.
+            if let livePreview, livePreview.isShowing(channel), let current = player.currentItem {
+                backend = .avPlayer
+                streamExtension = "m3u8"
+                current.externalMetadata = metadata(for: item)
+                observe(current)
+                hasStream = true
+                player.play()
+                return
+            }
+        }
 
         do {
             let url = try await resolveURL(for: item)
@@ -163,9 +225,11 @@ final class PlayerViewModel {
             playerItem.externalMetadata = metadata(for: item)
             observe(playerItem)
             player.replaceCurrentItem(with: playerItem)
+            hasStream = true
             player.play()
 
-            if case .live = item {
+            if case .live(let channel, let lineup) = item {
+                livePreview?.adopt(channel, lineup: lineup)
                 await recordLiveView()
             }
         } catch is CancellationError {
@@ -192,6 +256,7 @@ final class PlayerViewModel {
         let engine = vlc ?? VLCPlaybackEngine()
         vlc = engine
         engine.load(url: url, startAt: pendingSeek, userAgent: Self.streamUserAgent)
+        hasStream = true
         engine.setVideoScaling(crop: aspectMode.vlcCropGeometry, aspectRatio: aspectMode.vlcAspectRatio)
         engine.setRate(speed)
         pendingSeek = nil
@@ -277,7 +342,8 @@ final class PlayerViewModel {
 
     private func observe(_ playerItem: AVPlayerItem) {
         // KVO fires on an arbitrary thread: copy the values, then hop to the main actor.
-        statusObservation = playerItem.observe(\.status, options: [.new]) { @Sendable [weak self] item, _ in
+        // `.initial`: an item taken over from the mini player is often ready already.
+        statusObservation = playerItem.observe(\.status, options: [.initial, .new]) { @Sendable [weak self] item, _ in
             guard let self else { return }
             let status = item.status
             let errorDescription = item.error?.localizedDescription
@@ -442,19 +508,50 @@ final class PlayerViewModel {
 
     // MARK: Helpers
 
+    /// Title view above the transport bar. Live: programme title, with the
+    /// channel as subtitle and the programme description in the info panel.
     private func metadata(for item: PlayableItem) -> [AVMetadataItem] {
-        let title = AVMutableMetadataItem()
-        title.identifier = .commonIdentifierTitle
-        title.value = item.title as NSString
-        title.extendedLanguageTag = "und"
-        return [title]
+        var result = [Self.metadataItem(.commonIdentifierTitle, nowNext?.now?.title ?? item.title)]
+        if item.isLive {
+            result.append(Self.metadataItem(.iTunesMetadataTrackSubTitle, item.title))
+            if let description = nowNext?.now?.description, !description.isEmpty {
+                result.append(Self.metadataItem(.commonIdentifierDescription, description))
+            }
+        }
+        return result
+    }
+
+    private static func metadataItem(_ identifier: AVMetadataIdentifier, _ value: String) -> AVMetadataItem {
+        let item = AVMutableMetadataItem()
+        item.identifier = identifier
+        item.value = value as NSString
+        item.extendedLanguageTag = "und"
+        return item
+    }
+
+    /// Now/next for the info overlay and title view, refreshed every minute
+    /// so a programme change while watching shows up.
+    private func loadGuideInfo(for channel: Channel) {
+        guideTask?.cancel()
+        nowNext = nil
+        guard let epg else { return }
+        guideTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let now = Date.now
+                let programs = (try? await epg.programs(channelID: channel.id, from: now.addingTimeInterval(-3 * 3600), to: now.addingTimeInterval(6 * 3600))) ?? []
+                guard !Task.isCancelled, let self, case .live(let current, _) = self.item, current.id == channel.id else { return }
+                self.nowNext = NowNext(programs: programs, at: .now)
+                self.player.currentItem?.externalMetadata = self.metadata(for: self.item)
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
     }
 
     private func showBanner(for channel: Channel) {
         channelBanner = channel
         bannerTask?.cancel()
         bannerTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled else { return }
             self?.channelBanner = nil
         }

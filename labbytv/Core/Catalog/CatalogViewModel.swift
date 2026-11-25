@@ -19,6 +19,9 @@ final class CatalogViewModel<Item: CatalogItem> {
     private(set) var hasMore = true
     private(set) var errorMessage: String?
 
+    /// Adds a Favorites category (Live TV and the Guide) filled by this
+    /// instead of the catalog endpoint.
+    @ObservationIgnored private let favoritesSource: (@MainActor () async -> [Item])?
     @ObservationIgnored private let repository: any CatalogRepository
     @ObservationIgnored private let parentalLock: ParentalLockService?
     @ObservationIgnored private var nextPage = 1
@@ -30,8 +33,18 @@ final class CatalogViewModel<Item: CatalogItem> {
     /// few more pages before showing the empty state.
     private static var maxEmptyPageSkips: Int { 5 }
 
-    init(type: ContentType, repository: any CatalogRepository, parentalLock: ParentalLockService? = nil, pageSize: Int = 48) {
+    init(
+        type: ContentType,
+        repository: any CatalogRepository,
+        parentalLock: ParentalLockService? = nil,
+        pageSize: Int = 48,
+        favoritesSource: (@MainActor () async -> [Item])? = nil
+    ) {
         self.type = type
+        self.favoritesSource = favoritesSource
+        if favoritesSource != nil {
+            categories = [.all, .favorites]
+        }
         self.repository = repository
         self.parentalLock = parentalLock
         self.pageSize = pageSize
@@ -66,6 +79,12 @@ final class CatalogViewModel<Item: CatalogItem> {
         await reload()
     }
 
+    /// Favourites changed somewhere (player, card menu): refresh if shown.
+    func favoritesDidChange() async {
+        guard selectedCategory == .favorites else { return }
+        await reload()
+    }
+
     func retry() async {
         if categories.count <= 1 {
             await loadCategories()
@@ -89,6 +108,15 @@ final class CatalogViewModel<Item: CatalogItem> {
         isLoading = true
         errorMessage = nil
         items = []
+
+        if selectedCategory == .favorites, let favoritesSource {
+            let list = await favoritesSource()
+            guard current == generation else { return }
+            items = Self.merge(existing: [], incoming: visible(list))
+            hasMore = false
+            isLoading = false
+            return
+        }
 
         do {
             var page: [Item] = try await fetch(page: 1)
@@ -167,7 +195,7 @@ final class CatalogViewModel<Item: CatalogItem> {
     private func loadCategories() async {
         do {
             let list = try await repository.categories(for: type)
-            categories = [.all] + list
+            categories = (favoritesSource == nil ? [.all] : [.all, .favorites]) + list
         } catch {
             // Chips are optional: the "All" grid still works without them.
         }

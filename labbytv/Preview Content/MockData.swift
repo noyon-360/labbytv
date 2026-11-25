@@ -13,6 +13,18 @@ nonisolated enum MockData {
         subscriptionExpiresAt: nil
     )
 
+    /// LABBY TV Pro, for the UI-test mock mode (the Guide is Pro-only).
+    static let premiumUser = User(
+        id: "preview-user",
+        name: "Preview User",
+        email: "preview@example.com",
+        role: "user",
+        plan: "premium",
+        subscriptionStatus: "active",
+        isEmailVerified: true,
+        subscriptionExpiresAt: nil
+    )
+
     static let loginResponse = LoginResponse(
         accessToken: "preview-access-token",
         refreshToken: "preview-refresh-token",
@@ -38,11 +50,11 @@ nonisolated enum MockData {
     }
 
     static let movies: [Movie] = (1...24).map {
-        Movie(id: 100 + $0, name: ["The Long Night", "Harbor Lights", "Red Canyon", "Paper Moon City"][$0 % 4] + " \($0)", rating: "7.\($0 % 9)", rating5Based: 3.5)
+        Movie(id: 100 + $0, name: ["The Long Night", "Harbor Lights", "Red Canyon", "Paper Moon City"][$0 % 4] + " \($0)", rating: "7.\($0 % 9)", rating5Based: 3.5, categoryId: "1")
     }
 
     static let series: [Series] = (1...24).map {
-        Series(id: 500 + $0, name: ["Northern Line", "The Archive", "Signal Lost"][$0 % 3] + " \($0)", plot: "A gripping story.", genre: "Drama", releaseDate: "2023")
+        Series(id: 500 + $0, name: ["Northern Line", "The Archive", "Signal Lost"][$0 % 3] + " \($0)", plot: "A gripping story.", genre: "Drama", releaseDate: "2023", categoryId: "1")
     }
 
     static let programs: [EPGProgram] = {

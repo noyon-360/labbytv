@@ -10,6 +10,7 @@ final class SeriesDetailViewModel {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var isFavorite = false
+    private(set) var related: [Series] = []
 
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
@@ -31,6 +32,11 @@ final class SeriesDetailViewModel {
 
     var context: EpisodeContext {
         EpisodeContext(seriesID: series.id, seriesTitle: title, cover: cover)
+    }
+
+    func loadRelated() async {
+        guard related.isEmpty else { return }
+        related = await RelatedTitles.load(.series, categoryID: series.categoryId, excluding: series.id, catalog: catalog)
     }
 
     func load() async {

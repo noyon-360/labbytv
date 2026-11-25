@@ -8,6 +8,10 @@ nonisolated struct Category: Decodable, Sendable, Hashable, Identifiable {
     /// The "All" chip, which loads the uncategorised catalog.
     static let all = Category(id: "", name: "All")
 
+    /// Favourite channels: not an Xtream category, filled from the backend
+    /// favourites instead of the catalog.
+    static let favorites = Category(id: "__favorites", name: "Favorites")
+
     init(id: String, name: String) {
         self.id = id
         self.name = name

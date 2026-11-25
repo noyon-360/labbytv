@@ -42,10 +42,22 @@ struct SeriesDetailView: View {
                     }
                     .focusSection()
                 }
+
+                if !viewModel.related.isEmpty {
+                    Shelf(title: "More Like This") {
+                        ForEach(viewModel.related) { series in
+                            NavigationLink(value: AppRoute.series(series)) {
+                                PosterCard(title: series.title, imageURL: series.imageURL)
+                            }
+                            .buttonStyle(CardButtonStyle())
+                        }
+                    }
+                }
             }
             .padding(.vertical, Spacing.l)
         }
         .scrollClipDisabled()
+        .task { await viewModel.loadRelated() }
     }
 
     private var header: some View {
@@ -116,7 +128,11 @@ struct SeriesDetailView: View {
 #if DEBUG
 #Preview {
     let environment = AppEnvironment.preview()
-    SeriesDetailView(viewModel: SeriesDetailViewModel(series: MockData.series[0], catalog: MockCatalogRepository(), history: MockWatchHistoryRepository()))
-        .environment(environment.playerPresenter)
+    NavigationStack {
+        SeriesDetailView(viewModel: SeriesDetailViewModel(series: MockData.series[0], catalog: MockCatalogRepository(), history: MockWatchHistoryRepository()))
+            .appRouteDestinations()
+    }
+    .environment(environment)
+    .environment(environment.playerPresenter)
 }
 #endif

@@ -20,6 +20,9 @@ public final class VLCPlaybackEngine {
     public private(set) var subtitleTracks: [VLCTrack] = []
     public private(set) var selectedAudioTrack: Int32 = -1
     public private(set) var selectedSubtitleTrack: Int32 = -1
+    /// Audio sync in milliseconds: positive plays the audio later, negative
+    /// earlier. Resets to 0 for each new video.
+    public private(set) var audioDelayMilliseconds = 0
 
     @ObservationIgnored let mediaPlayer = VLCMediaPlayer()
     /// VLC draws here. It's handed to VLC before `play()`: with no drawable
@@ -31,6 +34,7 @@ public final class VLCPlaybackEngine {
         return view
     }()
     @ObservationIgnored private var bridge: DelegateBridge?
+    @ObservationIgnored private var lastTrackRefresh = Date.distantPast
 
     public init() {
         let bridge = DelegateBridge(owner: self)
@@ -63,6 +67,7 @@ public final class VLCPlaybackEngine {
         duration = 0
         audioTracks = []
         subtitleTracks = []
+        audioDelayMilliseconds = 0
         mediaPlayer.media = media
         mediaPlayer.play()
     }
@@ -94,6 +99,12 @@ public final class VLCPlaybackEngine {
     public func selectSubtitleTrack(_ id: Int32) {
         mediaPlayer.currentVideoSubTitleIndex = id
         selectedSubtitleTrack = id
+    }
+
+    /// libVLC takes the delay in microseconds.
+    public func setAudioDelay(milliseconds: Int) {
+        audioDelayMilliseconds = milliseconds
+        mediaPlayer.currentAudioPlaybackDelay = milliseconds * 1000
     }
 
     public func stop() {
@@ -152,9 +163,15 @@ public final class VLCPlaybackEngine {
         if status == .buffering || status == .opening, mediaPlayer.isPlaying {
             status = .playing
         }
+        // MKV subtitle and audio tracks can appear after playback starts,
+        // with no state change to announce them; look again now and then.
+        if Date.now.timeIntervalSince(lastTrackRefresh) > 5 {
+            refreshTracks()
+        }
     }
 
     private func refreshTracks() {
+        lastTrackRefresh = .now
         audioTracks = Self.tracks(names: mediaPlayer.audioTrackNames, indexes: mediaPlayer.audioTrackIndexes)
         subtitleTracks = Self.tracks(names: mediaPlayer.videoSubTitlesNames, indexes: mediaPlayer.videoSubTitlesIndexes)
         selectedAudioTrack = mediaPlayer.currentAudioTrackIndex

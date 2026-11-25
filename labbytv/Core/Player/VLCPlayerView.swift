@@ -21,10 +21,12 @@ struct VLCPlayerView: View {
     @State private var showingSubtitles = false
     @State private var showingSpeed = false
     @State private var showingAspect = false
+    @State private var showingAudioSync = false
     @FocusState private var focus: ControlFocus?
 
     private enum ControlFocus: Hashable {
-        case catcher, back, playPause, forward, audio, subtitles, speed, aspect
+        case catcher, back, playPause, forward, audio, subtitles, speed, aspect, audioSync
+        case syncEarlier, syncLater, syncReset, syncDone
     }
 
     private static let skip: Double = 10
@@ -42,6 +44,10 @@ struct VLCPlayerView: View {
             if controlsVisible {
                 controls
                     .transition(.opacity)
+                if showingAudioSync {
+                    audioSyncPanel
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             } else {
                 // Invisible, full-screen focus target so the remote still
                 // works while the controls are hidden.
@@ -65,7 +71,9 @@ struct VLCPlayerView: View {
             showControls()
         }
         .onExitCommand {
-            if controlsVisible {
+            if showingAudioSync {
+                closeAudioSync()
+            } else if controlsVisible {
                 hideControls()
             } else {
                 onClose()
@@ -82,10 +90,18 @@ struct VLCPlayerView: View {
             }
         }
         .confirmationDialog("Subtitles", isPresented: $showingSubtitles) {
-            ForEach(engine.subtitleTracks) { track in
+            Button(label("Off", selected: engine.selectedSubtitleTrack < 0)) {
+                engine.selectSubtitleTrack(-1)
+            }
+            // VLC lists its own "Disable" entry as track -1; "Off" covers it.
+            ForEach(engine.subtitleTracks.filter { $0.id >= 0 }) { track in
                 Button(label(track.name, selected: track.id == engine.selectedSubtitleTrack)) {
                     engine.selectSubtitleTrack(track.id)
                 }
+            }
+        } message: {
+            if engine.subtitleTracks.allSatisfy({ $0.id < 0 }) {
+                Text("This video has no subtitle tracks. Some providers only add them to certain episodes.")
             }
         }
         .confirmationDialog("Playback Speed", isPresented: $showingSpeed) {
@@ -137,11 +153,14 @@ struct VLCPlayerView: View {
                         .buttonStyle(SecondaryButtonStyle())
                         .focused($focus, equals: .audio)
                 }
-                if !engine.subtitleTracks.isEmpty {
-                    Button { showingSubtitles = true } label: { Label("Subtitles", systemImage: "captions.bubble") }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .focused($focus, equals: .subtitles)
-                }
+                // Always shown, so the option is easy to find; the dialog
+                // says when the video has no tracks.
+                Button { showingSubtitles = true } label: { Label("Subtitles", systemImage: "captions.bubble") }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .focused($focus, equals: .subtitles)
+                Button { openAudioSync() } label: { Label("Sync", systemImage: "waveform") }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .focused($focus, equals: .audioSync)
             }
             .focusSection()
         }
@@ -151,6 +170,54 @@ struct VLCPlayerView: View {
                 .ignoresSafeArea()
         )
         .defaultFocus($focus, .playPause)
+    }
+
+    /// Audio delay in 50 ms steps. Stays open while the user adjusts and
+    /// listens; Back or Done closes it.
+    private var audioSyncPanel: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            Text("Audio Sync")
+                .font(AppFonts.headline)
+            Text(AudioSync.label(engine.audioDelayMilliseconds))
+                .font(AppFonts.body.monospacedDigit())
+                .foregroundStyle(engine.audioDelayMilliseconds == 0 ? AppColors.textSecondary : AppColors.accent)
+            HStack(spacing: Spacing.m) {
+                Button { adjustAudioDelay(by: -AudioSync.step) } label: { Label("Earlier", systemImage: "minus") }
+                    .focused($focus, equals: .syncEarlier)
+                Button { adjustAudioDelay(by: AudioSync.step) } label: { Label("Later", systemImage: "plus") }
+                    .focused($focus, equals: .syncLater)
+                Button("Reset") { engine.setAudioDelay(milliseconds: 0) }
+                    .focused($focus, equals: .syncReset)
+                Button("Done") { closeAudioSync() }
+                    .focused($focus, equals: .syncDone)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            Text("Earlier if you hear words before lips move, later if after.")
+                .font(AppFonts.caption)
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .foregroundStyle(AppColors.textPrimary)
+        .padding(Spacing.l)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Spacing.cornerRadius * 1.5))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(Spacing.xl)
+        .focusSection()
+    }
+
+    private func openAudioSync() {
+        showingAudioSync = true
+        hideTask?.cancel()
+        focus = .syncEarlier
+    }
+
+    private func closeAudioSync() {
+        showingAudioSync = false
+        focus = .audioSync
+        scheduleHide()
+    }
+
+    private func adjustAudioDelay(by delta: Int) {
+        engine.setAudioDelay(milliseconds: AudioSync.adjusted(engine.audioDelayMilliseconds, by: delta))
     }
 
     private func controlButton(_ symbol: String, focus value: ControlFocus, action: @escaping () -> Void) -> some View {
@@ -183,7 +250,7 @@ struct VLCPlayerView: View {
         guard controlsVisible else { return }
         hideTask = Task {
             try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled, engine.status == .playing, !showingAudio, !showingSubtitles, !showingSpeed, !showingAspect else { return }
+            guard !Task.isCancelled, engine.status == .playing, !showingAudio, !showingSubtitles, !showingSpeed, !showingAspect, !showingAudioSync else { return }
             hideControls()
         }
     }

@@ -5,11 +5,12 @@ struct ChannelCard: View {
     let channel: Channel
     var subtitle: String?
     var width: CGFloat = Spacing.channelTileWidth
+    var isFavorite = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: Spacing.s) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 ZStack {
                     AppColors.surface
                     RemoteImage(url: channel.imageURL, contentMode: .fit, placeholderSymbol: "tv")
@@ -17,20 +18,20 @@ struct ChannelCard: View {
                 }
                 .frame(width: width, height: width * 9 / 16)
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(channel.name)
-                        .font(AppFonts.caption)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
-                    if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
+                .focusedArtwork()
+                .overlay(alignment: .topTrailing) {
+                    if isFavorite {
+                        Image(systemName: "heart.fill")
                             .font(AppFonts.caption)
-                            .foregroundStyle(AppColors.textSecondary)
-                            .lineLimit(1)
+                            .foregroundStyle(AppColors.accent)
+                            .padding(Spacing.xs)
+                            .background(.black.opacity(0.6), in: Circle())
+                            .padding(Spacing.xs)
+                            .accessibilityLabel("Favorite")
                     }
                 }
-                .frame(width: width, alignment: .leading)
+
+                CardCaption(title: channel.name, subtitle: subtitle, titleLines: 1, width: width)
             }
         }
         .buttonStyle(CardButtonStyle())

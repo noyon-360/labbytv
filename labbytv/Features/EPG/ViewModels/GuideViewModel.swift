@@ -45,6 +45,41 @@ final class GuideViewModel {
         windowStart = DateFormatting.floorToHalfHour(.now)
     }
 
+    // MARK: Remote navigation along the timeline
+
+    /// The guide doesn't go back past the current half hour (no catch-up).
+    private var earliestStart: Date { max(fetchStart, DateFormatting.floorToHalfHour(now)) }
+    private var latestStart: Date { fetchEnd.addingTimeInterval(-Self.windowLength) }
+    var canSlideEarlier: Bool { windowStart > earliestStart }
+
+    /// Moving right past the row's last visible programme: the programme to
+    /// focus next, after sliding the window so it shows. Nil at the end of
+    /// the provider's data.
+    func slideForward(channelID: Int) -> EPGProgram? {
+        let list = programs[channelID] ?? []
+        guard let last = visiblePrograms(for: channelID).last,
+              let target = GuideTimeline.program(after: last, in: list) ?? (last.end > windowEnd ? last : nil) else { return nil }
+        reveal(target)
+        return target
+    }
+
+    /// Moving left off the row's first visible programme while the window is
+    /// in the future: the programme to focus instead of the channel cell.
+    func slideBack(from programID: String, channelID: Int) -> EPGProgram? {
+        guard canSlideEarlier,
+              let current = program(channelID: channelID, programID: programID) else { return nil }
+        let list = programs[channelID] ?? []
+        let target = current.start < windowStart ? current : GuideTimeline.program(before: current, in: list)
+        guard let target, target.end > earliestStart else { return nil }
+        reveal(target)
+        return target
+    }
+
+    private func reveal(_ program: EPGProgram) {
+        windowStart = GuideTimeline.windowStart(showing: program, current: windowStart, length: Self.windowLength, earliest: earliestStart, latest: latestStart)
+    }
+
+
     /// Called by each row's `.task(id:)`, so only visible rows load.
     func loadPrograms(for channel: Channel) async {
         guard programs[channel.id] == nil else { return }

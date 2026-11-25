@@ -66,3 +66,24 @@ Ticked = built, compiles clean in Swift 5 **and** Swift 6 language mode with no 
 - **Movies** (`/movie/…mkv` → stream.m8tricks.net/vod-api): **403 "This stream URL requires a signed token"** with every UA tried. Provider-side; no client can play it without that token. Need to confirm whether the Android app plays the same movie (227749095 / 230169080).
 - **Root cause of slow starts (2026-11-06):** labmax.live resolves to two Cloudflare IPs; `104.21.37.228` is unreachable from the dev network, `172.67.214.171` answers in 0.09 s. VLC tries addresses one by one (~45 s timeout per redirect hop, ~3 min total). Fix: `Core/Player/StreamURLResolver.swift` follows redirects with URLSession (races addresses) and hands VLC the final CDN URL. Measured: 222312851 → 2.3 s (206, MKV); 227749095 → 2.9 s (403, shown as "provider refused").
 - Not yet verified: VLC drawing video in the simulator (earlier log showed `h264 get_buffer() failed / no frame!`). May need a real Apple TV.
+
+## Client feedback round 1 (doc "Testing Round 01", 2026-11-20)
+Apple TV app only; no backend changes in this round. Recording (#8) and profiles (#16) need backend work and are not started.
+
+**Simulator verification (2026-11-26).** Driven with `XCUIRemote` from a throwaway UI-test project outside the repo (no UI test target in `labbytv.xcodeproj` yet), screenshots checked after every step. Real account for Live TV/favourites; the debug launch argument `-UITestMockData` (preview mocks, Pro, Apple's bipbop HLS) for EPG, playback and detail screens, because the provider (labmax.live) currently refuses every stream (live `-1013`, VOD HTTP 401) and returns no EPG. The last committed build fails the same way, so it's provider-side. Not checked: real Siri Remote swipes, real provider streams, VLC/MKV playback.
+
+- [x] #3 Live player navigation: `LiveControlsGate`, `PlayerContainerController`. Up/down changes channel while the controls are hidden and keeps changing channel while surfing (AVKit's bar shown by the channel press doesn't block the next one); after Select, up/down move between the buttons. Verified: down, down, up = 1→2→3→2; Select + up/down = buttons, no channel change.
+- [x] #4 Live player interface: favourite heart next to Aspect/Subtitles/Audio; programme title with the channel as subtitle; AVKit Info tab turned off for live (it opened on channel-down). Verified with mock EPG.
+- [x] #2 Channel info overlay: number, channel, programme, time, progress, description, next; on start and every change; hides after 6 s. Channel number printed verbatim (was "14,762").
+- [x] #7 Channel favourites: add/remove by press-and-hold and in the player; heart badge; Favorites category in Live TV and the Guide; empty-state hint. Verified on the real account (added two, removed both again).
+- [x] #9 Category menu: left list collapses to a rail in the grid; Back or Left from column 1 reopens it on the selected category. Fixed during testing: Right from the open list didn't reach the grid (cards were under the list), so the grid now slides beside the list; the heading shows only beside the open list.
+- [x] #5 EPG highlight: focused programme drawn above its neighbours (mock EPG).
+- [x] #6 Horizontal guide navigation: Right past the last programme slides later (2:30, 3:15, 4:00 AM…), Left comes back, then the channel column (mock EPG).
+- [x] #1 Mini player: preview plays, second Select goes full screen on the same stream (no restart), Back returns with it still playing.
+- [x] #15 Back: with controls showing Back hides them (was closing the player; `PlayerControlsHandle`), next Back closes; full-screen live → Guide with focus on the playing channel (was landing on the category list / time buttons); detail → grid with focus on the same poster; related detail → previous detail. Empty Favorites / Watch History (Profile) had nothing focusable, so Back closed the whole app; they now show a focused "Back to Profile" button (`EmptyStateView` action) and Back returns to Profile (verified 2026-11-26).
+- [x] #10 Content focus: yellow outline, white caption panel, bigger lift (seen on Home, Live TV, Movies, detail shelves).
+- [x] #11 Recommended: "More Like This" on movie and series detail, opens the related title, Back returns (mock data).
+- [ ] #12 Series subtitles: AVPlayer episodes show AVKit's Subtitles button (verified with bipbop). VLC (MKV) Subtitles button and Off option **not tested**: needs an MKV stream that plays.
+- [ ] #13 Audio sync: VLC "Sync" panel built, **not tested** (same reason). Not possible on AVPlayer.
+- [ ] #14 Single loading indicator: code done; not checked frame by frame in the simulator.
+- Not started (need backend, per user 2026-11-25): #8 recording, #16 profiles.

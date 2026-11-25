@@ -22,8 +22,13 @@ struct MainTabView: View {
         let catalog = environment.catalogRepository
         let lock = environment.parentalLock
         _home = State(initialValue: HomeViewModel(catalog: catalog, history: environment.historyRepository, preferences: environment.preferences, parentalLock: lock))
-        _live = State(initialValue: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock))
-        _guide = State(initialValue: GuideViewModel(channels: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock, pageSize: 30), cache: environment.epgCache))
+        let favorites = environment.channelFavorites
+        let favoriteChannels: @MainActor () async -> [Channel] = {
+            await favorites.loadIfNeeded()
+            return favorites.channels
+        }
+        _live = State(initialValue: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock, favoritesSource: favoriteChannels))
+        _guide = State(initialValue: GuideViewModel(channels: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock, pageSize: 30, favoritesSource: favoriteChannels), cache: environment.epgCache))
         _movies = State(initialValue: CatalogViewModel(type: .movies, repository: catalog, parentalLock: lock))
         _series = State(initialValue: CatalogViewModel(type: .series, repository: catalog, parentalLock: lock))
         _search = State(initialValue: SearchViewModel(catalog: catalog, parentalLock: lock))
@@ -35,11 +40,40 @@ struct MainTabView: View {
             .pinPrompt(environment.parentalLock)
             .fullScreenCover(item: $player.current) { item in
                 PlayerView(
-                    viewModel: PlayerViewModel(item: item, catalog: environment.catalogRepository, history: environment.historyRepository, preferences: environment.preferences),
+                    viewModel: PlayerViewModel(
+                        item: item,
+                        catalog: environment.catalogRepository,
+                        history: environment.historyRepository,
+                        preferences: environment.preferences,
+                        livePreview: sharesLivePreview(item) ? environment.livePreview : nil,
+                        favorites: environment.channelFavorites,
+                        epg: environment.epgCache
+                    ),
                     showsWatermark: !environment.premium.isPremium,
-                    onClose: { player.close() }
+                    onClose: { close(item) }
                 )
             }
+            .onChange(of: environment.channelFavorites.changeCount) {
+                Task {
+                    await live.favoritesDidChange()
+                    await guide.channels.favoritesDidChange()
+                }
+            }
+    }
+
+    /// Live TV plays through the guide's shared player when the guide is
+    /// available (Pro), so Back lands in the guide with the channel still
+    /// running in its mini player.
+    private func sharesLivePreview(_ item: PlayableItem) -> Bool {
+        item.isLive && environment.premium.isPremium
+    }
+
+    /// Client: Back from full-screen live TV returns to the TV guide.
+    private func close(_ item: PlayableItem) {
+        if sharesLivePreview(item) {
+            selection = .guide
+        }
+        player.close()
     }
 
     @ViewBuilder
@@ -94,5 +128,7 @@ struct MainTabView: View {
         .environment(environment.session)
         .environment(environment.premium)
         .environment(environment.playerPresenter)
+        .environment(environment.channelFavorites)
+        .environment(environment.livePreview)
 }
 #endif

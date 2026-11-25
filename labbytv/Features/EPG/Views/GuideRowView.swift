@@ -4,9 +4,9 @@ import SwiftUI
 struct GuideRowView: View {
     static let channelColumnWidth: CGFloat = 260
     static let rowHeight: CGFloat = 110
-    /// Points per minute: 3 h × 8 = 1440 pt, which with the channel column
-    /// fits the 1760-pt TV safe area without horizontal scrolling.
-    static let pointsPerMinute: CGFloat = 8
+    /// Points per minute: 3 h × 7.5 = 1350 pt, which with the category
+    /// rail and channel column fits the 1760-pt TV safe area.
+    static let pointsPerMinute: CGFloat = 7.5
 
     let channel: Channel
     let programs: [EPGProgram]?
@@ -14,6 +14,11 @@ struct GuideRowView: View {
     let windowStart: Date
     let windowEnd: Date
     let now: Date
+    /// Whether moving right past the last programme can slide the guide on.
+    var canSlideForward = true
+    /// The channel playing in the mini player.
+    var isPreviewing = false
+    var isFavorite = false
     var focus: FocusState<GuideFocus?>.Binding
     let onPlay: () -> Void
     let onRetry: () -> Void
@@ -24,16 +29,31 @@ struct GuideRowView: View {
                 HStack(spacing: Spacing.s) {
                     RemoteImage(url: channel.imageURL, contentMode: .fit, placeholderSymbol: "tv")
                         .frame(width: 80, height: 60)
-                    Text(channel.name)
-                        .font(AppFonts.caption)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(channel.name)
+                            .font(AppFonts.caption)
+                            .lineLimit(2)
+                        if isPreviewing || isFavorite {
+                            HStack(spacing: Spacing.xs) {
+                                if isPreviewing { Image(systemName: "speaker.wave.2.fill") }
+                                if isFavorite { Image(systemName: "heart.fill") }
+                            }
+                            .font(.system(size: 20))
+                            .foregroundStyle(AppColors.accent)
+                        }
+                    }
                 }
                 .frame(width: Self.channelColumnWidth - Spacing.s * 2, height: Self.rowHeight - Spacing.s, alignment: .leading)
                 .padding(.horizontal, Spacing.s)
                 .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(isPreviewing ? AppColors.accent : .clear, lineWidth: 3)
+                )
             }
             .buttonStyle(GuideCellStyle(isAiring: false))
             .focused(focus, equals: .channel(channel.id))
+            .zIndex(isFocused(.channel(channel.id)) ? 1 : 0)
 
             timeline
                 .frame(width: timelineWidth, height: Self.rowHeight - Spacing.s, alignment: .leading)
@@ -44,9 +64,23 @@ struct GuideRowView: View {
                             .allowsHitTesting(false)
                     }
                 }
+
+            // Catches "right" past the last programme so the guide can
+            // slide on; GuideView moves focus straight to the next programme.
+            if canSlideForward, programs?.isEmpty == false {
+                Color.clear
+                    .frame(width: 2, height: Self.rowHeight - Spacing.s)
+                    .focusable()
+                    .focused(focus, equals: .later(channelID: channel.id))
+                    .accessibilityHidden(true)
+            }
         }
         .frame(height: Self.rowHeight)
         .focusSection()
+    }
+
+    private func isFocused(_ value: GuideFocus) -> Bool {
+        focus.wrappedValue == value
     }
 
     private var timelineWidth: CGFloat {
@@ -104,6 +138,9 @@ struct GuideRowView: View {
         .buttonStyle(GuideCellStyle(isAiring: airing))
         .focused(focus, equals: .program(channelID: channel.id, programID: program.id))
         .frame(width: width, alignment: .leading)
+        // The style's own zIndex only orders views inside the button; this
+        // one lifts the focused cell above its neighbours in the row.
+        .zIndex(isFocused(.program(channelID: channel.id, programID: program.id)) ? 1 : 0)
     }
 
     private func placeholder(_ text: String) -> some View {

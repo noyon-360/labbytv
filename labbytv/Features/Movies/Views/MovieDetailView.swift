@@ -28,6 +28,28 @@ struct MovieDetailView: View {
     }
 
     private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                summary
+                if !viewModel.related.isEmpty {
+                    Shelf(title: "More Like This") {
+                        ForEach(viewModel.related) { movie in
+                            NavigationLink(value: AppRoute.movie(movie)) {
+                                PosterCard(title: movie.title, imageURL: movie.imageURL)
+                            }
+                            .buttonStyle(CardButtonStyle())
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, Spacing.l)
+        }
+        .scrollClipDisabled()
+        .defaultFocus($playFocused, true)
+        .task { await viewModel.loadRelated() }
+    }
+
+    private var summary: some View {
         HStack(alignment: .top, spacing: Spacing.xl) {
             RemoteImage(url: viewModel.posterURL, placeholderSymbol: "film")
                 .frame(width: 400, height: 600)
@@ -87,8 +109,6 @@ struct MovieDetailView: View {
             .foregroundStyle(AppColors.textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, Spacing.l)
-        .defaultFocus($playFocused, true)
     }
 
     private var resumeTitle: String {
@@ -100,7 +120,11 @@ struct MovieDetailView: View {
 #if DEBUG
 #Preview {
     let environment = AppEnvironment.preview()
-    MovieDetailView(viewModel: MovieDetailViewModel(movie: MockData.movies[0], catalog: MockCatalogRepository(), history: MockWatchHistoryRepository()))
-        .environment(environment.playerPresenter)
+    NavigationStack {
+        MovieDetailView(viewModel: MovieDetailViewModel(movie: MockData.movies[0], catalog: MockCatalogRepository(), history: MockWatchHistoryRepository()))
+            .appRouteDestinations()
+    }
+    .environment(environment)
+    .environment(environment.playerPresenter)
 }
 #endif

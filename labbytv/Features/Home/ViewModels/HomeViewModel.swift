@@ -21,6 +21,9 @@ final class HomeViewModel {
     @ObservationIgnored private let parentalLock: ParentalLockService?
     @ObservationIgnored private var seenLockChange = 0
     @ObservationIgnored private var seenLockReveal = 0
+    /// Overlapping loads (first appearance + player close) must not let the
+    /// older one clear `isLoading` while the newer is still fetching.
+    @ObservationIgnored private var generation = 0
 
     init(catalog: any CatalogRepository, history: any WatchHistoryRepository, preferences: Preferences, parentalLock: ParentalLockService? = nil) {
         self.catalog = catalog
@@ -53,25 +56,53 @@ final class HomeViewModel {
     var isEmpty: Bool { continueWatching.isEmpty && movies.isEmpty && series.isEmpty }
 
     func load() async {
+        generation += 1
+        let current = generation
         isLoading = true
         errorMessage = nil
-        defer {
-            isLoading = false
-            hasLoaded = true
-        }
 
         async let historyTask = try? history.history(page: 1, limit: 30)
         async let moviesTask: [Movie] = catalog.items(.movies, categoryID: nil, search: nil, page: 1, limit: 30)
         async let seriesTask: [Series] = catalog.items(.series, categoryID: nil, search: nil, page: 1, limit: 30)
 
-        var firstError: Error?
-        do { movies = Self.uniqueByName(visible(try await moviesTask, .movies)) } catch { firstError = error }
-        do { series = Self.uniqueByName(visible(try await seriesTask, .series)) } catch { firstError = firstError ?? error }
-        continueWatching = Self.continueWatching(from: await historyTask ?? [], preferences: preferences)
+        let movieResult: Result<[Movie], any Error>
+        do { movieResult = .success(try await moviesTask) } catch { movieResult = .failure(error) }
+        let seriesResult: Result<[Series], any Error>
+        do { seriesResult = .success(try await seriesTask) } catch { seriesResult = .failure(error) }
+        let historyItems = await historyTask
 
-        if isEmpty, let firstError, !(firstError is CancellationError) {
+        // A newer load (player closed, lock revealed) owns the state now.
+        guard current == generation else { return }
+        // The sidebar TabView can cancel Home's `.task` while the first fetch
+        // is still in flight. Treating that as "finished, nothing found" showed
+        // the empty state; instead keep the loader up and let the next
+        // appearance retry, without wiping shelves an earlier load filled.
+        if Task.isCancelled || Self.isCancellation(movieResult) || Self.isCancellation(seriesResult) {
+            isLoading = false
+            return
+        }
+
+        var firstError: Error?
+        switch movieResult {
+        case .success(let items): movies = Self.uniqueByName(visible(items, .movies))
+        case .failure(let error): firstError = error
+        }
+        switch seriesResult {
+        case .success(let items): series = Self.uniqueByName(visible(items, .series))
+        case .failure(let error): firstError = firstError ?? error
+        }
+        continueWatching = Self.continueWatching(from: historyItems ?? [], preferences: preferences)
+
+        if isEmpty, let firstError {
             errorMessage = (firstError as? APIError)?.userMessage ?? APIError.unknown.userMessage
         }
+        isLoading = false
+        hasLoaded = true
+    }
+
+    private static func isCancellation<T>(_ result: Result<T, any Error>) -> Bool {
+        if case .failure(let error) = result { return error is CancellationError }
+        return false
     }
 
     private func visible<Item: CatalogItem>(_ items: [Item], _ type: ContentType) -> [Item] {

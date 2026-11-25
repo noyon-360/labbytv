@@ -4,6 +4,10 @@ struct EmptyStateView: View {
     let symbol: String
     let title: String
     var message: String?
+    /// A focusable way out. Screens pushed onto a stack need one: with
+    /// nothing focusable, tvOS sends Back to the system and the app closes.
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.m) {
@@ -19,6 +23,11 @@ struct EmptyStateView: View {
                     .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 1000)
+            }
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .padding(.top, Spacing.m)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

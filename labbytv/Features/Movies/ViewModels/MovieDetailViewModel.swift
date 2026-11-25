@@ -10,6 +10,7 @@ final class MovieDetailViewModel {
     private(set) var errorMessage: String?
     private(set) var isFavorite = false
     private(set) var resumePosition: Double?
+    private(set) var related: [Movie] = []
 
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
@@ -35,6 +36,11 @@ final class MovieDetailViewModel {
 
     var playableItem: PlayableItem {
         .movie(id: movie.id, title: title, thumbnail: thumbnail)
+    }
+
+    func loadRelated() async {
+        guard related.isEmpty else { return }
+        related = await RelatedTitles.load(.movies, categoryID: movie.categoryId, excluding: movie.id, catalog: catalog)
     }
 
     func load() async {

@@ -42,5 +42,7 @@ struct AppRouter: View {
         .environment(environment.session)
         .environment(environment.premium)
         .environment(environment.playerPresenter)
+        .environment(environment.channelFavorites)
+        .environment(environment.livePreview)
 }
 #endif

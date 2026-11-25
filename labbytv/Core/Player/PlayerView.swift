@@ -4,6 +4,7 @@ import SwiftUI
 /// its own UI first, then the cover dismisses).
 struct PlayerView: View {
     @State private var viewModel: PlayerViewModel
+    @State private var controlsHandle = PlayerControlsHandle()
     let showsWatermark: Bool
     let onClose: () -> Void
 
@@ -21,8 +22,10 @@ struct PlayerView: View {
 
             switch viewModel.state {
             case .loading:
-                LoadingView(message: viewModel.item.title)
-                    .allowsHitTesting(false)
+                if !viewModel.hasStream {
+                    LoadingView(message: viewModel.item.title)
+                        .allowsHitTesting(false)
+                }
             case .failed(let message):
                 ErrorView(message: message, retry: { Task { await viewModel.retry() } }, secondaryTitle: "Close", secondaryAction: onClose)
                     .background(Color.black.opacity(0.85).ignoresSafeArea())
@@ -34,7 +37,12 @@ struct PlayerView: View {
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
-        .onExitCommand(perform: onClose)
+        // First Back hides AVKit's controls, the next one closes. (VLC
+        // handles Back itself in VLCPlayerView.)
+        .onExitCommand {
+            if viewModel.backend == .avPlayer && controlsHandle.dismissControlsIfVisible() { return }
+            onClose()
+        }
         .onChange(of: viewModel.didFinish) {
             if viewModel.didFinish { onClose() }
         }
@@ -66,24 +74,20 @@ struct PlayerView: View {
         PlayerSurface(
             player: viewModel.player,
             allowsChannelSwitching: viewModel.canSwitchChannels,
+            isLive: viewModel.item.isLive,
+            controlsHandle: controlsHandle,
             allowsSpeedChange: viewModel.canChangeSpeed,
             aspectMode: viewModel.aspectMode,
+            isFavorite: viewModel.canFavorite ? viewModel.isFavoriteChannel : nil,
             onChannelStep: { step in Task { await viewModel.switchChannel(by: step) } },
-            onAspectChange: viewModel.setAspectMode
+            onAspectChange: viewModel.setAspectMode,
+            onToggleFavorite: { Task { await viewModel.toggleFavorite() } }
         )
         .ignoresSafeArea()
     }
 
     private var overlays: some View {
-        VStack {
-            HStack {
-                if let channel = viewModel.channelBanner {
-                    ChannelBanner(channel: channel)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                Spacer()
-            }
-            Spacer()
+        ZStack(alignment: .bottom) {
             HStack {
                 Spacer()
                 // Free plan: the LABBY logo watermark, removed by LABBY TV Pro.
@@ -97,32 +101,15 @@ struct PlayerView: View {
                         .accessibilityHidden(true)
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            if let channel = viewModel.channelBanner {
+                ChannelInfoOverlay(channel: channel, nowNext: viewModel.nowNext, isFavorite: viewModel.isFavoriteChannel)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .padding(Spacing.xl)
         .allowsHitTesting(false)
         .animation(.easeInOut, value: viewModel.channelBanner)
-    }
-}
-
-private struct ChannelBanner: View {
-    let channel: Channel
-
-    var body: some View {
-        HStack(spacing: Spacing.m) {
-            RemoteImage(url: channel.imageURL, contentMode: .fit)
-                .frame(width: 120, height: 68)
-            VStack(alignment: .leading) {
-                if channel.num > 0 {
-                    Text("CH \(channel.num)")
-                        .font(AppFonts.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                Text(channel.name)
-                    .font(AppFonts.headline)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
-        }
-        .padding(Spacing.m)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Spacing.cornerRadius))
     }
 }

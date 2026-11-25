@@ -10,7 +10,7 @@ struct PosterCard: View {
     var width: CGFloat = Spacing.posterWidth
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             RemoteImage(url: imageURL, placeholderSymbol: "film")
                 .frame(width: width, height: width * 1.5)
                 .overlay(alignment: .bottom) {
@@ -19,19 +19,8 @@ struct PosterCard: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(AppFonts.caption)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(2, reservesSpace: true)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(AppFonts.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-            .frame(width: width, alignment: .leading)
+                .focusedArtwork()
+            CardCaption(title: title, subtitle: subtitle, width: width)
         }
         .accessibilityElement(children: .combine)
     }

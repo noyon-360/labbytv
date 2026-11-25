@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WatchHistoryView: View {
     @Environment(PlayerPresenter.self) private var player
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel: FavoritesViewModel
     @State private var unavailableItem: WatchHistoryItem?
 
@@ -32,10 +33,16 @@ struct WatchHistoryView: View {
         } else if let message = viewModel.errorMessage {
             ErrorView(message: message, retry: { Task { await viewModel.load() } })
         } else if viewModel.items.isEmpty {
+            // The button gives the remote something to focus; without it
+            // Back closed the whole app (found driving the simulator).
             EmptyStateView(
                 symbol: viewModel.mode == .favorites ? "heart" : "clock",
                 title: viewModel.mode == .favorites ? "No favorites yet" : "Nothing watched yet",
-                message: viewModel.mode == .favorites ? "Add movies and series to your favorites from their detail page." : nil
+                message: viewModel.mode == .favorites
+                    ? "Add movies and series from their detail page, and channels by pressing and holding Select in Live TV."
+                    : "Movies, episodes and channels you watch will show up here.",
+                actionTitle: "Back to Profile",
+                action: { dismiss() }
             )
         } else {
             ScrollView {

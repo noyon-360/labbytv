@@ -17,6 +17,8 @@ final class AppEnvironment {
     @ObservationIgnored let epgCache: EPGCache
     @ObservationIgnored let historyRepository: any WatchHistoryRepository
     @ObservationIgnored let profileRepository: any ProfileRepository
+    @ObservationIgnored let channelFavorites: ChannelFavorites
+    @ObservationIgnored let livePreview: LivePreview
 
     init(
         session: SessionStore,
@@ -40,6 +42,8 @@ final class AppEnvironment {
         self.epgCache = EPGCache(repository: epgRepository)
         self.historyRepository = historyRepository
         self.profileRepository = profileRepository
+        self.channelFavorites = ChannelFavorites(repository: historyRepository)
+        self.livePreview = LivePreview(catalog: catalogRepository)
         self.parentalLock = ParentalLockService(store: store, preferences: preferences, profile: profileRepository)
     }
 
@@ -75,6 +79,8 @@ final class AppEnvironment {
     func signOut() async {
         await premium.logOut()
         await epgCache.clear()
+        livePreview.stop()
+        channelFavorites.reset()
         session.signOut()
     }
 
