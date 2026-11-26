@@ -74,6 +74,7 @@ final class SeriesDetailViewModel {
         var request = UpdateVideoStatusRequest(title: title, videoId: String(series.id), videoType: "series")
         request.isLoved = newValue
         request.thumbnail = cover.isEmpty ? nil : cover
+        request.setCategory(id: series.categoryId, name: nil)
         do {
             try await history.update(request)
         } catch {

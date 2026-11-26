@@ -79,6 +79,7 @@ final class MovieDetailViewModel {
         var request = UpdateVideoStatusRequest(title: title, videoId: String(movie.id), videoType: "movie")
         request.isLoved = newValue
         request.thumbnail = thumbnail.isEmpty ? nil : thumbnail
+        request.setCategory(id: movie.categoryId, name: nil)
         do {
             try await history.update(request)
         } catch {

@@ -487,6 +487,7 @@ final class PlayerViewModel {
         guard case .live(let channel, _) = item else { return }
         var request = UpdateVideoStatusRequest(title: channel.name.isEmpty ? "Live TV" : channel.name, videoId: String(channel.id), videoType: "live")
         request.thumbnail = channel.streamIcon.isEmpty ? nil : channel.streamIcon
+        request.setCategory(id: channel.categoryId, name: nil)
         try? await history.update(request)
     }
 

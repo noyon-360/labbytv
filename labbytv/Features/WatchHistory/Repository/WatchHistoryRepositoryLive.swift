@@ -2,6 +2,8 @@ import Foundation
 
 nonisolated struct WatchHistoryRepositoryLive: WatchHistoryRepository {
     let client: APIClient
+    /// Fills `categoryName` when the caller only knows the id.
+    var categoryNames: CategoryNames?
 
     func history(page: Int, limit: Int) async throws -> [WatchHistoryItem] {
         let result: WatchHistoryPage = try await client.get(.watchHistory, query: Self.paging(page, limit))
@@ -18,6 +20,11 @@ nonisolated struct WatchHistoryRepositoryLive: WatchHistoryRepository {
     }
 
     func update(_ request: UpdateVideoStatusRequest) async throws {
+        var request = request
+        if let id = request.categoryId, request.categoryName == nil,
+           let type = ContentType(historyVideoType: request.videoType) {
+            request.categoryName = await categoryNames?.name(for: type, id: id)
+        }
         let _: EmptyResponse = try await client.post(.updateVideoStatus, body: request)
     }
 

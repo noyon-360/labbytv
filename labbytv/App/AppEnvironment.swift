@@ -19,6 +19,7 @@ final class AppEnvironment {
     @ObservationIgnored let profileRepository: any ProfileRepository
     @ObservationIgnored let channelFavorites: ChannelFavorites
     @ObservationIgnored let livePreview: LivePreview
+    @ObservationIgnored let viewerProfiles: ViewerProfileStore
 
     init(
         session: SessionStore,
@@ -30,7 +31,8 @@ final class AppEnvironment {
         catalogRepository: any CatalogRepository,
         epgRepository: any EPGRepository,
         historyRepository: any WatchHistoryRepository,
-        profileRepository: any ProfileRepository
+        profileRepository: any ProfileRepository,
+        viewerProfileRepository: any ViewerProfileRepository
     ) {
         self.session = session
         self.premium = premium
@@ -45,6 +47,7 @@ final class AppEnvironment {
         self.channelFavorites = ChannelFavorites(repository: historyRepository)
         self.livePreview = LivePreview(catalog: catalogRepository)
         self.parentalLock = ParentalLockService(store: store, preferences: preferences, profile: profileRepository)
+        self.viewerProfiles = ViewerProfileStore(repository: viewerProfileRepository, store: store)
     }
 
     /// The real app: Keychain, live backend.
@@ -52,27 +55,40 @@ final class AppEnvironment {
         let store = KeychainStore()
         let session = SessionStore(store: store)
         let premium = PremiumService()
-        let client = APIClient(store: store) { [weak session, weak premium] in
-            await premium?.logOut()
-            await session?.signOut()
-        }
+        // The client is built before the profile store it reports to.
+        let profileGone = ProfileGoneRelay()
+        let client = APIClient(
+            store: store,
+            onSessionExpired: { [weak session, weak premium] in
+                await premium?.logOut()
+                await session?.signOut()
+            },
+            onProfileGone: { await profileGone.notify() }
+        )
         // Repositories are nonisolated; they read the active playlist from
         // the main-actor session on demand.
         let credentials: @Sendable () async -> ServerCredentials? = { [weak session] in
             await session?.credentials
         }
-        return AppEnvironment(
+        let catalog = CatalogRepositoryLive(client: client, credentials: credentials)
+        let categoryNames = CategoryNames(catalog: catalog) { [weak session] in
+            await session?.activePlaylist?.id
+        }
+        let environment = AppEnvironment(
             session: session,
             store: store,
             premium: premium,
             preferences: Preferences(),
             authRepository: AuthRepositoryLive(client: client, store: store),
             playlistRepository: PlaylistRepositoryLive(client: client),
-            catalogRepository: CatalogRepositoryLive(client: client, credentials: credentials),
+            catalogRepository: catalog,
             epgRepository: EPGRepositoryLive(client: client, credentials: credentials),
-            historyRepository: WatchHistoryRepositoryLive(client: client),
-            profileRepository: ProfileRepositoryLive(client: client)
+            historyRepository: WatchHistoryRepositoryLive(client: client, categoryNames: categoryNames),
+            profileRepository: ProfileRepositoryLive(client: client),
+            viewerProfileRepository: ViewerProfileRepositoryLive(client: client)
         )
+        profileGone.store = environment.viewerProfiles
+        return environment
     }
 
     /// Signs out everywhere: RevenueCat, then the local session.
@@ -81,7 +97,15 @@ final class AppEnvironment {
         await epgCache.clear()
         livePreview.stop()
         channelFavorites.reset()
+        viewerProfiles.reset()
         session.signOut()
+    }
+
+    /// History, favourites and Continue Watching belong to the profile, so
+    /// drop what the previous one loaded.
+    func viewerProfileDidChange() {
+        livePreview.stop()
+        channelFavorites.reset()
     }
 
     /// After login or register: link RevenueCat and load the profile.
@@ -96,6 +120,16 @@ final class AppEnvironment {
         guard let user = try? await profileRepository.profile() else { return }
         session.updateUser(user)
         premium.update(from: user)
+    }
+
+    /// Hands the client's "profile gone" callback to the store once it exists.
+    @MainActor
+    private final class ProfileGoneRelay {
+        weak var store: ViewerProfileStore?
+
+        func notify() async {
+            await store?.profileWasDeleted()
+        }
     }
 
     #if DEBUG
@@ -118,7 +152,8 @@ final class AppEnvironment {
             catalogRepository: MockCatalogRepository(),
             epgRepository: MockEPGRepository(),
             historyRepository: MockWatchHistoryRepository(),
-            profileRepository: MockProfileRepository()
+            profileRepository: MockProfileRepository(),
+            viewerProfileRepository: MockViewerProfileRepository()
         )
     }
     #endif

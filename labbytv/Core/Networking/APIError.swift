@@ -12,6 +12,8 @@ nonisolated enum APIError: Error, Equatable, Sendable {
     case decoding
     /// A content call ran before a playlist was chosen.
     case noPlaylist
+    /// The viewer profile in use was deleted on another device.
+    case profileGone
     case unknown
 
     var userMessage: String {
@@ -29,6 +31,8 @@ nonisolated enum APIError: Error, Equatable, Sendable {
             return "We received an unexpected response. Please try again."
         case .noPlaylist:
             return "Choose a playlist first."
+        case .profileGone:
+            return "This profile no longer exists. Please choose a profile."
         case .unknown:
             return "Something went wrong. Please try again."
         }

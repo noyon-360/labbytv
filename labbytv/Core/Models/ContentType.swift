@@ -34,3 +34,15 @@ nonisolated enum ContentType: String, Sendable, CaseIterable, Hashable {
         }
     }
 }
+
+nonisolated extension ContentType {
+    /// Watch history's `videoType` (`live | movie | series`).
+    init?(historyVideoType: String) {
+        switch historyVideoType {
+        case "live": self = .channels
+        case "movie": self = .movies
+        case "series": self = .series
+        default: return nil
+        }
+    }
+}

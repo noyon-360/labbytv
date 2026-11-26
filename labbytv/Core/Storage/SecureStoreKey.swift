@@ -14,7 +14,10 @@ nonisolated enum SecureStoreKey: String, CaseIterable, Sendable {
     /// sign-out, as in the Flutter app: the lock belongs to the device.
     case parentalPinHash
     case parentalPinSalt
+    /// The "Who's Watching" profile this device uses, sent as `X-Profile-ID`.
+    /// Not secret, but it lives with the session so sign-out clears it.
+    case viewerProfileId
 
     /// Everything cleared on sign-out.
-    static let sessionKeys: [SecureStoreKey] = [.accessToken, .refreshToken, .userId, .role, .activePlaylist]
+    static let sessionKeys: [SecureStoreKey] = [.accessToken, .refreshToken, .userId, .role, .activePlaylist, .viewerProfileId]
 }

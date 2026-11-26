@@ -22,6 +22,12 @@ struct ProfileView: View {
                     if !viewModel.isPremium {
                         row("Get LABBY TV Pro", symbol: "crown.fill", route: .paywall)
                     }
+                    Button {
+                        Task { await viewModel.switchProfile() }
+                    } label: {
+                        ProfileRowLabel(title: "Switch Profile", symbol: "person.2.fill", detail: viewModel.viewerProfile?.name, tint: AppColors.accent)
+                    }
+                    .buttonStyle(CardButtonStyle())
                     row("Switch Playlist", symbol: "list.bullet.rectangle", detail: viewModel.playlistName, route: .playlists)
                     row("Favorites", symbol: "heart.fill", route: .favorites)
                     row("Watch History", symbol: "clock.fill", route: .history)
@@ -85,9 +91,23 @@ struct ProfileView: View {
 
     private var account: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
-            Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 140))
-                .foregroundStyle(AppColors.surfaceRaised)
+            if let profile = viewModel.viewerProfile {
+                HStack(spacing: Spacing.m) {
+                    ProfileAvatarView(avatar: profile.avatar, size: 140)
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Watching as")
+                            .font(AppFonts.caption)
+                            .foregroundStyle(AppColors.textSecondary)
+                        Text(profile.name)
+                            .font(AppFonts.headline)
+                            .lineLimit(1)
+                    }
+                }
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 140))
+                    .foregroundStyle(AppColors.surfaceRaised)
+            }
             if viewModel.isLoading && viewModel.user == nil {
                 ProgressView()
             }

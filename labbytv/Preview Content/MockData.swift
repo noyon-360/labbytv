@@ -2,6 +2,18 @@
 import Foundation
 
 nonisolated enum MockData {
+    /// One main profile, so the mock run opens straight into the app (as a
+    /// real single-profile account does).
+    static let viewerProfiles = [
+        ViewerProfile(id: "profile-main", name: "Preview User", avatar: "avatar_01", isDefault: true),
+    ]
+
+    /// For previews of "Who's Watching".
+    static let severalViewerProfiles = viewerProfiles + [
+        ViewerProfile(id: "profile-kids", name: "Kids", avatar: "avatar_05"),
+        ViewerProfile(id: "profile-guest", name: "Guest", avatar: "avatar_09"),
+    ]
+
     static let user = User(
         id: "preview-user",
         name: "Preview User",

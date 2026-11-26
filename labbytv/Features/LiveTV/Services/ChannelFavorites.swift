@@ -53,6 +53,7 @@ final class ChannelFavorites {
         var request = UpdateVideoStatusRequest(title: channel.name.isEmpty ? "Live TV" : channel.name, videoId: String(channel.id), videoType: "live")
         request.isLoved = !wasFavorite
         request.thumbnail = channel.streamIcon.isEmpty ? nil : channel.streamIcon
+        request.setCategory(id: channel.categoryId, name: nil)
         do {
             try await repository.update(request)
         } catch {

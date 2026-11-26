@@ -7,7 +7,20 @@ nonisolated struct APIEndpoint: Sendable, Equatable {
     /// 401/403: the backend answers a wrong password with 403.
     var requiresAuth: Bool = true
 
-    static let baseURL = URL(string: "https://api.labbytv.com/api/v1")!
+    static let production = URL(string: "https://api.labbytv.com/api/v1")!
+
+    /// Debug builds can point at a local backend with the launch argument
+    /// `-LabbyAPIBase http://127.0.0.1:5000/api/v1`. Release builds always
+    /// use production.
+    static var baseURL: URL {
+        #if DEBUG
+        if let override = UserDefaults.standard.string(forKey: "LabbyAPIBase"),
+           let url = URL(string: override), url.scheme != nil {
+            return url
+        }
+        #endif
+        return production
+    }
 
     // MARK: Auth
     static let login = APIEndpoint(path: "/auth/login", requiresAuth: false)
@@ -24,6 +37,12 @@ nonisolated struct APIEndpoint: Sendable, Equatable {
     /// Parental lock "Forgot PIN?": `{ password }` → `{ valid }`. Answers 200
     /// even for a wrong password, because a 401 would log the user out.
     static let verifyPassword = APIEndpoint(path: "/user/verify-password")
+
+    // MARK: Viewer profiles ("Who's Watching")
+    static let viewerProfiles = APIEndpoint(path: "/profiles")
+    static func viewerProfile(_ id: String) -> APIEndpoint {
+        APIEndpoint(path: "/profiles/\(id)")
+    }
 
     // MARK: Playlist
     static let addPlaylist = APIEndpoint(path: "/playlist/add-playlist")

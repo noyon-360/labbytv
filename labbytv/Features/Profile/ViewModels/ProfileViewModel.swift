@@ -16,6 +16,12 @@ final class ProfileViewModel {
     var playlistName: String { environment.session.activePlaylist?.name ?? "None" }
     var isPremium: Bool { environment.premium.isPremium }
     var parentalLockIsOn: Bool { environment.parentalLock.hasPin }
+    /// The "Who's Watching" profile in use (nil: the main one, not yet loaded).
+    var viewerProfile: ViewerProfile? { environment.viewerProfiles.current }
+
+    func switchProfile() async {
+        await environment.viewerProfiles.showPicker()
+    }
 
     var planLabel: String {
         if environment.premium.isInFreeTrial { return "LABBY TV Pro · Free trial" }

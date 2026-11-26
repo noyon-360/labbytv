@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Login → Playlist picker → Main tabs, driven by `SessionStore`.
+/// Login → Playlist picker → "Who's Watching" (when needed) → Main tabs,
+/// driven by `SessionStore` and `ViewerProfileStore`.
 struct AppRouter: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(SessionStore.self) private var session
@@ -22,16 +23,42 @@ struct AppRouter: View {
                     autoSelectSingle: true
                 ))
             } else {
-                // Rebuilt per playlist so catalog state never mixes providers.
-                MainTabView(environment: environment)
-                    .id(session.activePlaylist?.id)
+                switch profiles.phase {
+                case .deciding:
+                    LoadingView()
+                        .task { await profiles.start() }
+                case .picker:
+                    NavigationStack {
+                        WhoIsWatchingView(viewModel: WhoIsWatchingViewModel(store: profiles))
+                    }
+                case .ready:
+                    // Rebuilt per playlist and per profile, so catalog state
+                    // never mixes providers and history never mixes viewers.
+                    MainTabView(environment: environment)
+                        .id(MainTabIdentity(playlist: session.activePlaylist?.id, profile: profiles.current?.id))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppColors.background)
         .animation(.easeInOut(duration: 0.25), value: session.isLoggedIn)
         .animation(.easeInOut(duration: 0.25), value: session.activePlaylist?.id)
+        .animation(.easeInOut(duration: 0.25), value: profiles.phase)
+        .onChange(of: profiles.current?.id) {
+            environment.viewerProfileDidChange()
+        }
+        .onChange(of: session.isLoggedIn) { _, loggedIn in
+            // Also covers the session expiring (refresh token rejected).
+            if !loggedIn { profiles.reset() }
+        }
     }
+
+    private var profiles: ViewerProfileStore { environment.viewerProfiles }
+}
+
+private struct MainTabIdentity: Hashable {
+    let playlist: String?
+    let profile: String?
 }
 
 #if DEBUG

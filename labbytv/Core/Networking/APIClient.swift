@@ -11,6 +11,7 @@ actor APIClient {
     private let urlSession: URLSession
     private let store: any SecureStore
     private let onSessionExpired: @Sendable () async -> Void
+    private let onProfileGone: @Sendable () async -> Void
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -20,12 +21,14 @@ actor APIClient {
         baseURL: URL = APIEndpoint.baseURL,
         urlSession: URLSession = .shared,
         store: any SecureStore,
-        onSessionExpired: @escaping @Sendable () async -> Void
+        onSessionExpired: @escaping @Sendable () async -> Void,
+        onProfileGone: @escaping @Sendable () async -> Void = {}
     ) {
         self.baseURL = baseURL
         self.urlSession = urlSession
         self.store = store
         self.onSessionExpired = onSessionExpired
+        self.onProfileGone = onProfileGone
     }
 
     // MARK: Public API
@@ -36,14 +39,7 @@ actor APIClient {
         body: Body,
         as responseType: Response.Type = Response.self
     ) async throws -> Response {
-        let bodyData: Data
-        do {
-            bodyData = try encoder.encode(body)
-        } catch {
-            Logger.network.error("Encoding failed for \(endpoint.path, privacy: .public)")
-            throw APIError.unknown
-        }
-        return try await send(endpoint, method: "POST", query: [], body: bodyData, allowRefresh: true)
+        try await send(endpoint, method: "POST", query: [], body: encode(body, for: endpoint), allowRefresh: true)
     }
 
     func get<Response: Decodable & Sendable>(
@@ -52,6 +48,30 @@ actor APIClient {
         as responseType: Response.Type = Response.self
     ) async throws -> Response {
         try await send(endpoint, method: "GET", query: query, body: nil, allowRefresh: true)
+    }
+
+    func patch<Body: Encodable & Sendable, Response: Decodable & Sendable>(
+        _ endpoint: APIEndpoint,
+        body: Body,
+        as responseType: Response.Type = Response.self
+    ) async throws -> Response {
+        try await send(endpoint, method: "PATCH", query: [], body: encode(body, for: endpoint), allowRefresh: true)
+    }
+
+    func delete<Response: Decodable & Sendable>(
+        _ endpoint: APIEndpoint,
+        as responseType: Response.Type = Response.self
+    ) async throws -> Response {
+        try await send(endpoint, method: "DELETE", query: [], body: nil, allowRefresh: true)
+    }
+
+    private func encode<Body: Encodable>(_ body: Body, for endpoint: APIEndpoint) throws -> Data {
+        do {
+            return try encoder.encode(body)
+        } catch {
+            Logger.network.error("Encoding failed for \(endpoint.path, privacy: .public)")
+            throw APIError.unknown
+        }
     }
 
     // MARK: Request pipeline
@@ -78,7 +98,23 @@ actor APIClient {
                 throw error
             }
         }
-        return try unwrap(data, status: status)
+        do {
+            return try unwrap(data, status: status)
+        } catch APIError.server(let status, let message) where Self.isProfileGone(status: status, message: message) {
+            // The profile in X-Profile-ID was deleted on another device. Forget
+            // it so later requests fall back to the main profile, and let the
+            // app ask "Who's Watching" again instead of saving into the wrong one.
+            Logger.network.notice("Viewer profile no longer exists")
+            store.remove(.viewerProfileId)
+            await onProfileGone()
+            throw APIError.profileGone
+        }
+    }
+
+    /// The backend's `resolveProfile` answers 409 with this code. Other 409s
+    /// (a duplicate profile name) are ordinary errors.
+    nonisolated static func isProfileGone(status: Int, message: String) -> Bool {
+        status == 409 && message.contains("PROFILE_NOT_FOUND")
     }
 
     private func makeRequest(
@@ -100,6 +136,11 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if endpoint.requiresAuth, let token = store.string(for: .accessToken) {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            // Which "Who's Watching" profile history, favourites and reminders
+            // belong to. No header = the account's main profile.
+            if let profileID = store.string(for: .viewerProfileId), !profileID.isEmpty {
+                request.setValue(profileID, forHTTPHeaderField: "X-Profile-ID")
+            }
         }
         for (field, value) in extraHeaders {
             request.setValue(value, forHTTPHeaderField: field)
