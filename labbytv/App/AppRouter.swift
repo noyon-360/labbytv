@@ -47,6 +47,10 @@ struct AppRouter: View {
         .onChange(of: profiles.current?.id) {
             environment.viewerProfileDidChange()
         }
+        // My List is kept per playlist.
+        .onChange(of: session.activePlaylist?.id) {
+            environment.myList.reset()
+        }
         .onChange(of: session.isLoggedIn) { _, loggedIn in
             // Also covers the session expiring (refresh token rejected).
             if !loggedIn { profiles.reset() }

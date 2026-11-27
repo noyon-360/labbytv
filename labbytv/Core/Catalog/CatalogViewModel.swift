@@ -11,7 +11,11 @@ final class CatalogViewModel<Item: CatalogItem> {
     let type: ContentType
     let pageSize: Int
 
-    private(set) var categories: [Category] = [.all]
+    private(set) var categories: [Category] = [.all] {
+        didSet { categoryNames = Dictionary(categories.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }) }
+    }
+    /// Name by id, for the category line under each poster (client, Android TV V1).
+    private(set) var categoryNames: [String: String] = [:]
     private(set) var selectedCategory: Category = .all
     private(set) var items: [Item] = []
     private(set) var isLoading = false
@@ -56,6 +60,12 @@ final class CatalogViewModel<Item: CatalogItem> {
     var parentalLockChangeCount: Int { parentalLock?.changeCount ?? 0 }
 
     /// Shows a lock on chips the PIN hasn't opened this session.
+    /// The title's category, for its caption. `nil` until the list loads.
+    func categoryName(for id: String) -> String? {
+        guard let name = categoryNames[id], !name.isEmpty else { return nil }
+        return name
+    }
+
     func isLocked(_ category: Category) -> Bool {
         parentalLock?.isHidden(type, categoryID: category.id) ?? false
     }

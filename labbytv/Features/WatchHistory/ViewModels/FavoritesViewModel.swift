@@ -72,6 +72,11 @@ final class FavoritesViewModel {
     }
 
     func destination(for item: WatchHistoryItem) -> Destination {
+        Self.destination(for: item, preferences: preferences)
+    }
+
+    /// Shared with Home's Recently Watched row.
+    static func destination(for item: WatchHistoryItem, preferences: Preferences) -> Destination {
         switch item.videoType {
         case "live":
             guard let id = item.streamID else { return .unavailable }

@@ -72,6 +72,9 @@ public final class VLCPlaybackEngine {
         mediaPlayer.play()
     }
 
+    /// Decoded picture size; zero until the first frame.
+    public var videoSize: CGSize { mediaPlayer.videoSize }
+
     public func play() { mediaPlayer.play() }
     public func pause() { mediaPlayer.pause() }
 

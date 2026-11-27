@@ -6,7 +6,13 @@ struct MoviesView: View {
     var body: some View {
         CatalogGridView(viewModel: viewModel, columns: 6, emptySymbol: "film") { movie in
             NavigationLink(value: AppRoute.movie(movie)) {
-                PosterCard(title: movie.title, imageURL: movie.imageURL, subtitle: movie.rating5Based > 0 ? "★ \(String(format: "%.1f", movie.rating5Based))" : nil)
+                PosterCard(
+                    title: movie.title,
+                    imageURL: movie.imageURL,
+                    // Client (Android TV V1): show which category a title is in.
+                    subtitle: viewModel.categoryName(for: movie.categoryId) ?? "Movie",
+                    badge: RatingBadge.text(movie.rating5Based)
+                )
             }
             .buttonStyle(CardButtonStyle())
         }

@@ -10,11 +10,13 @@ nonisolated struct Series: CatalogItem {
     let releaseDate: String
     let rating5Based: Double
     let categoryId: String
+    /// Provider's last change (Unix seconds), for Recently Added on Home.
+    let lastModified: Int?
 
     var title: String { name }
     var imageURL: URL? { URL(xtreamImage: cover) }
 
-    init(id: Int, name: String, cover: String = "", plot: String = "", genre: String = "", releaseDate: String = "", rating5Based: Double = 0, categoryId: String = "") {
+    init(id: Int, name: String, cover: String = "", plot: String = "", genre: String = "", releaseDate: String = "", rating5Based: Double = 0, categoryId: String = "", lastModified: Int? = nil) {
         self.id = id
         self.name = name
         self.cover = cover
@@ -23,6 +25,7 @@ nonisolated struct Series: CatalogItem {
         self.releaseDate = releaseDate
         self.rating5Based = rating5Based
         self.categoryId = categoryId
+        self.lastModified = lastModified
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -31,6 +34,7 @@ nonisolated struct Series: CatalogItem {
         case releaseDateSnake = "release_date"
         case rating5Based = "rating_5based"
         case categoryId = "category_id"
+        case lastModified = "last_modified"
     }
 
     init(from decoder: any Decoder) throws {
@@ -43,5 +47,6 @@ nonisolated struct Series: CatalogItem {
         releaseDate = container.lenientString(.releaseDate) ?? container.lenientString(.releaseDateSnake) ?? ""
         rating5Based = container.lenientDouble(.rating5Based) ?? 0
         categoryId = container.lenientString(.categoryId) ?? ""
+        lastModified = container.lenientInt(.lastModified)
     }
 }

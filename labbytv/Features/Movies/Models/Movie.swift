@@ -9,11 +9,13 @@ nonisolated struct Movie: CatalogItem {
     let rating5Based: Double
     let categoryId: String
     let containerExtension: String
+    /// When the provider added it (Unix seconds), for Recently Added on Home.
+    let added: Int?
 
     var title: String { name }
     var imageURL: URL? { URL(xtreamImage: streamIcon) }
 
-    init(id: Int, name: String, streamIcon: String = "", rating: String = "", rating5Based: Double = 0, categoryId: String = "", containerExtension: String = "") {
+    init(id: Int, name: String, streamIcon: String = "", rating: String = "", rating5Based: Double = 0, categoryId: String = "", containerExtension: String = "", added: Int? = nil) {
         self.id = id
         self.name = name
         self.streamIcon = streamIcon
@@ -21,10 +23,11 @@ nonisolated struct Movie: CatalogItem {
         self.rating5Based = rating5Based
         self.categoryId = categoryId
         self.containerExtension = containerExtension
+        self.added = added
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, rating
+        case name, rating, added
         case streamId = "stream_id"
         case streamIcon = "stream_icon"
         case rating5Based = "rating_5based"
@@ -41,5 +44,6 @@ nonisolated struct Movie: CatalogItem {
         rating5Based = container.lenientDouble(.rating5Based) ?? 0
         categoryId = container.lenientString(.categoryId) ?? ""
         containerExtension = container.lenientString(.containerExtension) ?? ""
+        added = container.lenientInt(.added)
     }
 }

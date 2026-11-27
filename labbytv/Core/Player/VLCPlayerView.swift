@@ -9,6 +9,7 @@ import SwiftUI
 struct VLCPlayerView: View {
     let engine: VLCPlaybackEngine
     let title: String
+    var resolution: String?
     let aspectMode: VideoAspectMode
     let speed: Float
     let onAspectChange: (VideoAspectMode) -> Void
@@ -123,10 +124,15 @@ struct VLCPlayerView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Spacer()
-            Text(title)
-                .font(AppFonts.headline)
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
+            HStack(spacing: Spacing.s) {
+                Text(title)
+                    .font(AppFonts.headline)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                if let resolution {
+                    ResolutionBadge(text: resolution)
+                }
+            }
 
             HStack(spacing: Spacing.m) {
                 Text(Self.format(engine.currentTime))

@@ -56,6 +56,7 @@ struct PlayerView: View {
             VLCPlayerView(
                 engine: engine,
                 title: viewModel.item.title,
+                resolution: viewModel.resolution,
                 aspectMode: viewModel.aspectMode,
                 speed: viewModel.speed,
                 onAspectChange: viewModel.setAspectMode,
@@ -104,7 +105,7 @@ struct PlayerView: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
 
             if let channel = viewModel.channelBanner {
-                ChannelInfoOverlay(channel: channel, nowNext: viewModel.nowNext, isFavorite: viewModel.isFavoriteChannel)
+                ChannelInfoOverlay(channel: channel, nowNext: viewModel.nowNext, isFavorite: viewModel.isFavoriteChannel, resolution: viewModel.resolution)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }

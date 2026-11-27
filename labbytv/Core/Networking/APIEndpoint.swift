@@ -69,6 +69,13 @@ nonisolated struct APIEndpoint: Sendable, Equatable {
         APIEndpoint(path: "/watch-history/status/\(videoId)")
     }
 
+    // MARK: My List (watch later)
+    static let watchLater = APIEndpoint(path: "/watch-later")
+    static let watchLaterStatus = APIEndpoint(path: "/watch-later/status")
+    static func watchLaterItem(_ id: String) -> APIEndpoint {
+        APIEndpoint(path: "/watch-later/\(id)")
+    }
+
     // MARK: Payment
     static let mySubscription = APIEndpoint(path: "/payment/my-subscription")
     static let verifyApplePurchase = APIEndpoint(path: "/payment/verify-apple-purchase")

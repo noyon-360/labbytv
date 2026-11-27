@@ -12,12 +12,15 @@ final class SeriesDetailViewModel {
     private(set) var isFavorite = false
     private(set) var related: [Series] = []
 
+    /// `nil` in previews without a My List.
+    let myList: MyListToggleViewModel?
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
     @ObservationIgnored private var isTogglingFavorite = false
 
-    init(series: Series, catalog: any CatalogRepository, history: any WatchHistoryRepository) {
+    init(series: Series, catalog: any CatalogRepository, history: any WatchHistoryRepository, myList: MyList? = nil) {
         self.series = series
+        self.myList = myList.map { MyListToggleViewModel(myList: $0, videoType: "series", videoID: String(series.id)) }
         self.catalog = catalog
         self.history = history
     }
@@ -40,6 +43,9 @@ final class SeriesDetailViewModel {
     }
 
     func load() async {
+        if let myList, !myList.isKnown {
+            Task { await myList.load() }
+        }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

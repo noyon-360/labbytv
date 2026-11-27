@@ -12,12 +12,15 @@ final class MovieDetailViewModel {
     private(set) var resumePosition: Double?
     private(set) var related: [Movie] = []
 
+    /// `nil` in previews without a My List.
+    let myList: MyListToggleViewModel?
     @ObservationIgnored private let catalog: any CatalogRepository
     @ObservationIgnored private let history: any WatchHistoryRepository
     @ObservationIgnored private var isTogglingFavorite = false
 
-    init(movie: Movie, catalog: any CatalogRepository, history: any WatchHistoryRepository) {
+    init(movie: Movie, catalog: any CatalogRepository, history: any WatchHistoryRepository, myList: MyList? = nil) {
         self.movie = movie
+        self.myList = myList.map { MyListToggleViewModel(myList: $0, videoType: "movie", videoID: String(movie.id)) }
         self.catalog = catalog
         self.history = history
     }
@@ -44,6 +47,9 @@ final class MovieDetailViewModel {
     }
 
     func load() async {
+        if let myList, !myList.isKnown {
+            Task { await myList.load() }
+        }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

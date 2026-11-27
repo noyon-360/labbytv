@@ -39,6 +39,9 @@ final class PlayerViewModel {
     private(set) var aspectMode: VideoAspectMode
     /// VLC only; AVPlayer's speed lives in its own transport bar control.
     private(set) var speed: Float = PlaybackSpeed.normal
+    /// "SD" / "HD" / "FHD" / "4K" once the first frame is decoded (client,
+    /// Android TV V1: show the real resolution).
+    private(set) var resolution: String?
 
     /// For live TV this is the shared `LivePreview` player when there is one,
     /// so the guide's mini player keeps the stream after Back.
@@ -60,6 +63,7 @@ final class PlayerViewModel {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endTask: Task<Void, Never>?
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
+    @ObservationIgnored private var resolutionTask: Task<Void, Never>?
     @ObservationIgnored private var pendingSeek: Double?
     @ObservationIgnored private var streamExtension = ""
     @ObservationIgnored private var streamIsInsecure = false
@@ -128,7 +132,32 @@ final class PlayerViewModel {
     func start() async {
         if case .live(let channel, _) = item { showBanner(for: channel) }
         await favorites?.loadIfNeeded()
+        watchResolution()
         await load(item)
+    }
+
+    /// Polls the picture size: it's only known after the first frame and
+    /// can change (adaptive HLS, channel switch).
+    private func watchResolution() {
+        resolutionTask?.cancel()
+        resolutionTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let label = VideoResolution.label(for: self.videoSize)
+                if label != self.resolution {
+                    self.resolution = label
+                    self.player.currentItem?.externalMetadata = self.metadata(for: self.item)
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private var videoSize: CGSize {
+        #if canImport(LabbyVLC)
+        if backend == .vlc { return vlc?.videoSize ?? .zero }
+        #endif
+        return player.currentItem?.presentationSize ?? .zero
     }
 
     func retry() async {
@@ -150,6 +179,7 @@ final class PlayerViewModel {
         teardown()
         guideTask?.cancel()
         bannerTask?.cancel()
+        resolutionTask?.cancel()
         if let livePreview {
             // Leave the stream running for the guide's mini player, unless
             // it never started.
@@ -514,10 +544,13 @@ final class PlayerViewModel {
     private func metadata(for item: PlayableItem) -> [AVMetadataItem] {
         var result = [Self.metadataItem(.commonIdentifierTitle, nowNext?.now?.title ?? item.title)]
         if item.isLive {
-            result.append(Self.metadataItem(.iTunesMetadataTrackSubTitle, item.title))
+            let subtitle = [item.title, resolution].compactMap { $0 }.joined(separator: "  ·  ")
+            result.append(Self.metadataItem(.iTunesMetadataTrackSubTitle, subtitle))
             if let description = nowNext?.now?.description, !description.isEmpty {
                 result.append(Self.metadataItem(.commonIdentifierDescription, description))
             }
+        } else if let resolution {
+            result.append(Self.metadataItem(.iTunesMetadataTrackSubTitle, resolution))
         }
         return result
     }

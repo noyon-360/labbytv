@@ -6,6 +6,7 @@ struct ChannelInfoOverlay: View {
     let channel: Channel
     let nowNext: NowNext?
     var isFavorite = false
+    var resolution: String?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -30,6 +31,9 @@ struct ChannelInfoOverlay: View {
                             Image(systemName: "heart.fill")
                                 .font(AppFonts.caption)
                                 .foregroundStyle(AppColors.accent)
+                        }
+                        if let resolution {
+                            ResolutionBadge(text: resolution)
                         }
                     }
 
@@ -87,7 +91,8 @@ struct ChannelInfoOverlay: View {
             now: EPGProgram(id: "1", title: "Evening News", description: "Headlines and weather from around the country.", start: now.addingTimeInterval(-1200), end: now.addingTimeInterval(1800)),
             next: EPGProgram(id: "2", title: "Late Movie", description: "", start: now.addingTimeInterval(1800), end: now.addingTimeInterval(7200))
         ),
-        isFavorite: true
+        isFavorite: true,
+        resolution: "FHD"
     )
     .padding(Spacing.xl)
     .frame(maxHeight: .infinity, alignment: .bottom)

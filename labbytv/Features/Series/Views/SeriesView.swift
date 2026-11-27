@@ -6,7 +6,12 @@ struct SeriesView: View {
     var body: some View {
         CatalogGridView(viewModel: viewModel, columns: 6, emptySymbol: "tv.and.mediabox") { series in
             NavigationLink(value: AppRoute.series(series)) {
-                PosterCard(title: series.title, imageURL: series.imageURL, subtitle: series.releaseDate.prefix(4).isEmpty ? nil : String(series.releaseDate.prefix(4)))
+                PosterCard(
+                    title: series.title,
+                    imageURL: series.imageURL,
+                    subtitle: viewModel.categoryName(for: series.categoryId) ?? "Series",
+                    badge: RatingBadge.text(series.rating5Based)
+                )
             }
             .buttonStyle(CardButtonStyle())
         }

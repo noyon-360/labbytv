@@ -20,6 +20,9 @@ final class AppEnvironment {
     @ObservationIgnored let channelFavorites: ChannelFavorites
     @ObservationIgnored let livePreview: LivePreview
     @ObservationIgnored let viewerProfiles: ViewerProfileStore
+    @ObservationIgnored let categoryNames: CategoryNames
+    @ObservationIgnored let watchLaterRepository: any WatchLaterRepository
+    @ObservationIgnored let myList: MyList
 
     init(
         session: SessionStore,
@@ -32,7 +35,9 @@ final class AppEnvironment {
         epgRepository: any EPGRepository,
         historyRepository: any WatchHistoryRepository,
         profileRepository: any ProfileRepository,
-        viewerProfileRepository: any ViewerProfileRepository
+        viewerProfileRepository: any ViewerProfileRepository,
+        watchLaterRepository: any WatchLaterRepository,
+        categoryNames: CategoryNames? = nil
     ) {
         self.session = session
         self.premium = premium
@@ -48,6 +53,11 @@ final class AppEnvironment {
         self.livePreview = LivePreview(catalog: catalogRepository)
         self.parentalLock = ParentalLockService(store: store, preferences: preferences, profile: profileRepository)
         self.viewerProfiles = ViewerProfileStore(repository: viewerProfileRepository, store: store)
+        self.watchLaterRepository = watchLaterRepository
+        self.myList = MyList(repository: watchLaterRepository)
+        self.categoryNames = categoryNames ?? CategoryNames(catalog: catalogRepository) { [weak session] in
+            await session?.activePlaylist?.id
+        }
     }
 
     /// The real app: Keychain, live backend.
@@ -85,7 +95,11 @@ final class AppEnvironment {
             epgRepository: EPGRepositoryLive(client: client, credentials: credentials),
             historyRepository: WatchHistoryRepositoryLive(client: client, categoryNames: categoryNames),
             profileRepository: ProfileRepositoryLive(client: client),
-            viewerProfileRepository: ViewerProfileRepositoryLive(client: client)
+            viewerProfileRepository: ViewerProfileRepositoryLive(client: client),
+            watchLaterRepository: WatchLaterRepositoryLive(client: client) { [weak session] in
+                await session?.activePlaylist?.id
+            },
+            categoryNames: categoryNames
         )
         profileGone.store = environment.viewerProfiles
         return environment
@@ -97,6 +111,7 @@ final class AppEnvironment {
         await epgCache.clear()
         livePreview.stop()
         channelFavorites.reset()
+        myList.reset()
         viewerProfiles.reset()
         session.signOut()
     }
@@ -106,6 +121,7 @@ final class AppEnvironment {
     func viewerProfileDidChange() {
         livePreview.stop()
         channelFavorites.reset()
+        myList.reset()
     }
 
     /// After login or register: link RevenueCat and load the profile.
@@ -153,7 +169,8 @@ final class AppEnvironment {
             epgRepository: MockEPGRepository(),
             historyRepository: MockWatchHistoryRepository(),
             profileRepository: MockProfileRepository(),
-            viewerProfileRepository: MockViewerProfileRepository()
+            viewerProfileRepository: MockViewerProfileRepository(),
+            watchLaterRepository: MockWatchLaterRepository()
         )
     }
     #endif

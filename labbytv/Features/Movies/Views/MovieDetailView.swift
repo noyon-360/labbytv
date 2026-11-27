@@ -101,6 +101,10 @@ struct MovieDetailView: View {
                         Label(viewModel.isFavorite ? "In Favorites" : "Add to Favorites", systemImage: viewModel.isFavorite ? "heart.fill" : "heart")
                     }
                     .buttonStyle(SecondaryButtonStyle())
+
+                    if let myList = viewModel.myList {
+                        MyListButton(viewModel: myList, title: viewModel.title, thumbnail: viewModel.thumbnail)
+                    }
                 }
                 .padding(.top, Spacing.m)
                 .focusSection()

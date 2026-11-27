@@ -21,7 +21,14 @@ struct MainTabView: View {
         player = environment.playerPresenter
         let catalog = environment.catalogRepository
         let lock = environment.parentalLock
-        _home = State(initialValue: HomeViewModel(catalog: catalog, history: environment.historyRepository, preferences: environment.preferences, parentalLock: lock))
+        _home = State(initialValue: HomeViewModel(
+            catalog: catalog,
+            history: environment.historyRepository,
+            preferences: environment.preferences,
+            parentalLock: lock,
+            channelFavorites: environment.channelFavorites,
+            myList: environment.myList
+        ))
         let favorites = environment.channelFavorites
         let favoriteChannels: @MainActor () async -> [Channel] = {
             await favorites.loadIfNeeded()
@@ -31,7 +38,7 @@ struct MainTabView: View {
         _guide = State(initialValue: GuideViewModel(channels: CatalogViewModel(type: .channels, repository: catalog, parentalLock: lock, pageSize: 30, favoritesSource: favoriteChannels), cache: environment.epgCache))
         _movies = State(initialValue: CatalogViewModel(type: .movies, repository: catalog, parentalLock: lock))
         _series = State(initialValue: CatalogViewModel(type: .series, repository: catalog, parentalLock: lock))
-        _search = State(initialValue: SearchViewModel(catalog: catalog, parentalLock: lock))
+        _search = State(initialValue: SearchViewModel(catalog: catalog, parentalLock: lock, categoryNames: environment.categoryNames))
         _profile = State(initialValue: ProfileViewModel(environment: environment))
     }
 

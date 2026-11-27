@@ -15,6 +15,9 @@ nonisolated struct WatchHistoryItem: Decodable, Sendable, Hashable, Identifiable
     let progressPercentage: Double
     let isCompleted: Bool
     let isLoved: Bool
+    /// Saved with the record since the profiles update; older records have none.
+    let categoryName: String?
+    let lastWatchedAt: Date?
 
     var imageURL: URL? { URL(xtreamImage: thumbnail) }
     var streamID: Int? { Int(videoId) }
@@ -24,6 +27,7 @@ nonisolated struct WatchHistoryItem: Decodable, Sendable, Hashable, Identifiable
         case id = "_id"
         case videoId, videoType, seasonNumber, episodeNumber, name, title, thumbnail
         case currentTime, duration, progressPercentage, isCompleted, isLoved
+        case categoryName, lastWatchedAt, updatedAt
     }
 
     init(from decoder: any Decoder) throws {
@@ -40,5 +44,15 @@ nonisolated struct WatchHistoryItem: Decodable, Sendable, Hashable, Identifiable
         progressPercentage = container.lenientDouble(.progressPercentage) ?? 0
         isCompleted = container.lenientBool(.isCompleted) ?? false
         isLoved = container.lenientBool(.isLoved) ?? false
+        let category = container.lenientString(.categoryName)?.trimmingCharacters(in: .whitespaces)
+        categoryName = category?.isEmpty == false ? category : nil
+        lastWatchedAt = Self.date(container.lenientString(.lastWatchedAt)) ?? Self.date(container.lenientString(.updatedAt))
+    }
+
+    /// Mongo dates arrive as ISO 8601 with milliseconds.
+    private static func date(_ string: String?) -> Date? {
+        guard let string else { return nil }
+        return (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(string))
+            ?? (try? Date.ISO8601FormatStyle().parse(string))
     }
 }

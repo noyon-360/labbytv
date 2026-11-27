@@ -7,6 +7,8 @@ struct PosterCard: View {
     let imageURL: URL?
     var subtitle: String?
     var progress: Double?
+    /// Short text on the artwork's top corner, e.g. the rating "★ 4.2".
+    var badge: String?
     var width: CGFloat = Spacing.posterWidth
 
     var body: some View {
@@ -16,6 +18,17 @@ struct PosterCard: View {
                 .overlay(alignment: .bottom) {
                     if let progress, progress > 0 {
                         ProgressBar(value: progress)
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if let badge, !badge.isEmpty {
+                        Text(badge)
+                            .font(AppFonts.caption)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.horizontal, Spacing.xs)
+                            .padding(.vertical, 4)
+                            .background(.black.opacity(0.7), in: Capsule())
+                            .padding(Spacing.xs)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
@@ -29,7 +42,7 @@ struct PosterCard: View {
 #if DEBUG
 #Preview {
     HStack(spacing: Spacing.gridSpacing) {
-        Button {} label: { PosterCard(title: MockData.movies[0].title, imageURL: nil, subtitle: "2024") }
+        Button {} label: { PosterCard(title: MockData.movies[0].title, imageURL: nil, subtitle: "Action", badge: "★ 4.2") }
         Button {} label: { PosterCard(title: MockData.movies[1].title, imageURL: nil, progress: 0.4) }
     }
     .buttonStyle(CardButtonStyle())

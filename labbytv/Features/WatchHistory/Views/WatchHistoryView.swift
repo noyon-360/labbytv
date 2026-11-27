@@ -60,7 +60,8 @@ struct WatchHistoryView: View {
 
     @ViewBuilder
     private func cell(for item: WatchHistoryItem) -> some View {
-        let subtitle = item.videoType == "live" ? "Live TV" : (item.seasonNumber.map { "S\($0) E\(item.episodeNumber ?? 0)" } ?? item.videoType.capitalized)
+        // Category badge (client, Android TV V1) when the record has one.
+        let subtitle = HomeRows.caption(for: item)
         let card = PosterCard(title: item.name, imageURL: item.imageURL, subtitle: subtitle, progress: viewModel.mode == .history && item.videoType != "live" ? item.progress : nil)
         switch viewModel.destination(for: item) {
         case .route(let route):

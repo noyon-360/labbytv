@@ -8,9 +8,9 @@ struct AppRouteDestination: View {
     var body: some View {
         switch route {
         case .movie(let movie):
-            MovieDetailView(viewModel: MovieDetailViewModel(movie: movie, catalog: environment.catalogRepository, history: environment.historyRepository))
+            MovieDetailView(viewModel: MovieDetailViewModel(movie: movie, catalog: environment.catalogRepository, history: environment.historyRepository, myList: environment.myList))
         case .series(let series):
-            SeriesDetailView(viewModel: SeriesDetailViewModel(series: series, catalog: environment.catalogRepository, history: environment.historyRepository))
+            SeriesDetailView(viewModel: SeriesDetailViewModel(series: series, catalog: environment.catalogRepository, history: environment.historyRepository, myList: environment.myList))
         case .playlists:
             PlaylistPickerView(
                 viewModel: PlaylistPickerViewModel(repository: environment.playlistRepository, session: environment.session, autoSelectSingle: false),

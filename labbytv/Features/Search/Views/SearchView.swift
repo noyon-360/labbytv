@@ -23,7 +23,7 @@ struct SearchView: View {
                 if !viewModel.channels.isEmpty {
                     Shelf(title: "Channels") {
                         ForEach(viewModel.channels) { channel in
-                            ChannelCard(channel: channel) {
+                            ChannelCard(channel: channel, subtitle: viewModel.category(of: channel, .channels)) {
                                 player.play(.live(channel, lineup: viewModel.channels))
                             }
                         }
@@ -33,7 +33,7 @@ struct SearchView: View {
                     Shelf(title: "Movies") {
                         ForEach(viewModel.movies) { movie in
                             NavigationLink(value: AppRoute.movie(movie)) {
-                                PosterCard(title: movie.title, imageURL: movie.imageURL)
+                                PosterCard(title: movie.title, imageURL: movie.imageURL, subtitle: viewModel.category(of: movie, .movies) ?? "Movie", badge: RatingBadge.text(movie.rating5Based))
                             }
                             .buttonStyle(CardButtonStyle())
                         }
@@ -43,7 +43,7 @@ struct SearchView: View {
                     Shelf(title: "Series") {
                         ForEach(viewModel.series) { series in
                             NavigationLink(value: AppRoute.series(series)) {
-                                PosterCard(title: series.title, imageURL: series.imageURL)
+                                PosterCard(title: series.title, imageURL: series.imageURL, subtitle: viewModel.category(of: series, .series) ?? "Series", badge: RatingBadge.text(series.rating5Based))
                             }
                             .buttonStyle(CardButtonStyle())
                         }

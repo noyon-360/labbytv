@@ -62,11 +62,11 @@ nonisolated enum MockData {
     }
 
     static let movies: [Movie] = (1...24).map {
-        Movie(id: 100 + $0, name: ["The Long Night", "Harbor Lights", "Red Canyon", "Paper Moon City"][$0 % 4] + " \($0)", rating: "7.\($0 % 9)", rating5Based: 3.5, categoryId: "1")
+        Movie(id: 100 + $0, name: ["The Long Night", "Harbor Lights", "Red Canyon", "Paper Moon City"][$0 % 4] + " \($0)", rating: "7.\($0 % 9)", rating5Based: 3.5, categoryId: String($0 % 4 + 1), added: 1_700_000_000 + $0 * 86_400)
     }
 
     static let series: [Series] = (1...24).map {
-        Series(id: 500 + $0, name: ["Northern Line", "The Archive", "Signal Lost"][$0 % 3] + " \($0)", plot: "A gripping story.", genre: "Drama", releaseDate: "2023", categoryId: "1")
+        Series(id: 500 + $0, name: ["Northern Line", "The Archive", "Signal Lost"][$0 % 3] + " \($0)", plot: "A gripping story.", genre: "Drama", releaseDate: "2023", rating5Based: 4.1, categoryId: String($0 % 4 + 1), lastModified: 1_700_000_000 + (24 - $0) * 86_400)
     }
 
     static let programs: [EPGProgram] = {
@@ -84,11 +84,17 @@ nonisolated enum MockData {
 
     static let historyItems: [WatchHistoryItem] = decode("""
     [
-      {"_id":"h1","videoId":"101","videoType":"movie","title":"The Long Night 1","currentTime":1200,"duration":5400,"isCompleted":false,"isLoved":true},
-      {"_id":"h2","videoId":"102","videoType":"movie","title":"Harbor Lights 2","currentTime":300,"duration":6000,"isCompleted":false,"isLoved":false},
-      {"_id":"h3","videoId":"3","videoType":"live","title":"Cinema HD 3","isLoved":true}
+      {"_id":"h1","videoId":"101","videoType":"movie","title":"The Long Night 1","currentTime":1200,"duration":5400,"isCompleted":false,"isLoved":true,"categoryName":"Action","lastWatchedAt":"2026-11-27T09:00:00.000Z"},
+      {"_id":"h2","videoId":"102","videoType":"movie","title":"Harbor Lights 2","currentTime":300,"duration":6000,"isCompleted":false,"isLoved":false,"categoryName":"Drama","lastWatchedAt":"2026-11-27T10:00:00.000Z"},
+      {"_id":"h3","videoId":"3","videoType":"live","title":"Cinema HD 3","isLoved":true,"categoryName":"Movies","lastWatchedAt":"2026-11-27T08:00:00.000Z"},
+      {"_id":"h4","videoId":"5","videoType":"live","title":"Music Live 5","isLoved":true,"categoryName":"Sports","lastWatchedAt":"2026-11-26T08:00:00.000Z"}
     ]
     """)
+
+    static let watchLaterItems: [WatchLaterItem] = [
+        WatchLaterItem(id: "w1", videoType: "movie", videoId: "105", title: "Harbor Lights 5"),
+        WatchLaterItem(id: "w2", videoType: "series", videoId: "502", title: "Signal Lost 2"),
+    ]
 
     static let seriesInfo: SeriesInfo = decode("""
     {
